@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import socket
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientResponse, ClientSession
 from yarl import URL
 
 from .const import CLIENT_ID_PREFIX, DEFAULT_PACKET_WINDOW_HOURS
@@ -252,6 +253,10 @@ class PyMCRepeaterApiClient:
     async def async_get_gps(self) -> dict[str, Any]:
         """Return local GPS receiver diagnostics."""
         return await self._async_request_wrapped("GET", "/api/gps")
+
+    async def async_open_gps_stream(self) -> ClientResponse:
+        """Open the GPS SSE stream."""
+        return await self._async_open_stream("GET", "/api/gps_stream")
 
     async def async_get_logs(self) -> dict[str, Any]:
         """Return buffered repeater logs."""
@@ -753,6 +758,41 @@ class PyMCRepeaterApiClient:
             raise PyMCRepeaterApiError(payload.get("error", f"Request failed for {path}"))
         return payload.get("data", payload)
 
+    async def _async_open_stream(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> ClientResponse:
+        headers = {"Accept": "text/event-stream"}
+        if not self.api_token:
+            raise PyMCRepeaterAuthenticationError("API token is not configured")
+        headers["X-API-Key"] = self.api_token
+        url = f"{self.base_url}{path}"
+
+        try:
+            response = await self._session.request(
+                method,
+                url,
+                params=params,
+                headers=headers,
+                timeout=None,
+            )
+        except ClientError as err:
+            raise PyMCRepeaterCannotConnect(
+                f"Cannot connect to {self.host}:{self.port}"
+            ) from err
+
+        if response.status in (401, 403):
+            response.release()
+            raise PyMCRepeaterAuthenticationError(f"Authentication failed for {path}")
+        if response.status >= 400:
+            detail = await response.text()
+            response.release()
+            raise PyMCRepeaterApiError(f"HTTP {response.status} from {path}: {detail[:200]}")
+        return response
+
     async def _async_request_json(
         self,
         method: str,
@@ -814,6 +854,20 @@ class PyMCRepeaterApiClient:
                 raise PyMCRepeaterAuthenticationError(error)
 
         return payload
+
+    @staticmethod
+    def decode_sse_payload(line: bytes) -> dict[str, Any] | None:
+        """Decode one SSE data line from the GPS stream."""
+        if not line.startswith(b"data:"):
+            return None
+        payload = line[5:].strip()
+        if not payload:
+            return None
+        try:
+            parsed = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
     def _build_client_id(self) -> str:
         """Create a stable-enough client identifier for HA bootstrap."""

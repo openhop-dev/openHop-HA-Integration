@@ -77,6 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     coordinator = PyMCRepeaterDataUpdateCoordinator(hass, entry, api)
     await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_start_runtime()
 
     repeater_name = get_repeater_name_from_stats(coordinator.data.get("stats", {}))
     if repeater_name and repeater_name != entry.title:
@@ -97,6 +98,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         entry_data = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if entry_data:
+            await entry_data["coordinator"].async_stop_runtime()
         if entry_data and (unsub := entry_data.get("unsub_options_listener")):
             unsub()
     return unload_ok

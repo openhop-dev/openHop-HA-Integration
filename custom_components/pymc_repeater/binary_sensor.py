@@ -76,12 +76,40 @@ BINARY_SENSORS: tuple[PyMCBinarySensorDescription, ...] = (
         value_fn=lambda data: bool(_nested(data, "update_status", "has_update")),
     ),
     PyMCBinarySensorDescription(
+        key="gps_enabled",
+        name="GPS enabled",
+        icon="mdi:satellite-uplink",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: bool(_nested(data, "gps", "enabled")),
+    ),
+    PyMCBinarySensorDescription(
+        key="gps_running",
+        name="GPS running",
+        icon="mdi:run-fast",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: bool(_nested(data, "gps", "running")),
+    ),
+    PyMCBinarySensorDescription(
         key="gps_fix_valid",
         name="GPS fix valid",
         icon="mdi:crosshairs-gps",
         entity_category=EntityCategory.DIAGNOSTIC,
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         value_fn=lambda data: bool(_nested(data, "gps", "status", "fix_valid")),
+    ),
+    PyMCBinarySensorDescription(
+        key="gps_stale",
+        name="GPS stale",
+        icon="mdi:timer-off-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: bool(_nested(data, "gps", "status", "stale")),
+    ),
+    PyMCBinarySensorDescription(
+        key="gps_location_update_enabled",
+        name="GPS location updates enabled",
+        icon="mdi:map-marker-plus-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: bool(_nested(data, "gps", "location_update", "enabled")),
     ),
 )
 
