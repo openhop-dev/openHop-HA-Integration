@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -39,6 +40,15 @@ def _nested(data: dict[str, Any], *keys: str) -> Any:
             return None
         value = value.get(key)
     return value
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _packet_drop_rate(data: dict[str, Any]) -> float | None:
@@ -183,11 +193,14 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: _nested(data, "gps", "status", "state"),
         attrs_fn=lambda data: {
+            "enabled": _nested(data, "gps", "enabled"),
+            "running": _nested(data, "gps", "running"),
             "fix_valid": _nested(data, "gps", "status", "fix_valid"),
             "stale": _nested(data, "gps", "status", "stale"),
             "age_seconds": _nested(data, "gps", "status", "age_seconds"),
             "last_update": _nested(data, "gps", "status", "last_update"),
             "last_error": _nested(data, "gps", "status", "last_error"),
+            "source": _nested(data, "gps", "source"),
         },
     ),
     PyMCSensorDescription(
@@ -229,6 +242,15 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         value_fn=lambda data: _nested(data, "gps", "position", "altitude_m"),
     ),
     PyMCSensorDescription(
+        key="gps_geoid_separation",
+        name="GPS geoid separation",
+        icon="mdi:image-filter-center-focus",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement="m",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "gps", "position", "geoid_separation_m"),
+    ),
+    PyMCSensorDescription(
         key="gps_speed",
         name="GPS speed",
         icon="mdi:speedometer",
@@ -245,6 +267,31 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         },
     ),
     PyMCSensorDescription(
+        key="gps_course",
+        name="GPS course",
+        icon="mdi:compass-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement="°",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "gps", "motion", "course_degrees"),
+        attrs_fn=lambda data: {
+            "magnetic_variation_degrees": _nested(
+                data, "gps", "motion", "magnetic_variation_degrees"
+            ),
+        },
+    ),
+    PyMCSensorDescription(
+        key="gps_magnetic_variation",
+        name="GPS magnetic variation",
+        icon="mdi:compass-rose",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement="°",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(
+            data, "gps", "motion", "magnetic_variation_degrees"
+        ),
+    ),
+    PyMCSensorDescription(
         key="gps_hdop",
         name="GPS HDOP",
         icon="mdi:map-marker-radius",
@@ -254,6 +301,81 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         attrs_fn=lambda data: {
             "pdop": _nested(data, "gps", "accuracy", "pdop"),
             "vdop": _nested(data, "gps", "accuracy", "vdop"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="gps_pdop",
+        name="GPS PDOP",
+        icon="mdi:map-marker-distance",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "gps", "accuracy", "pdop"),
+    ),
+    PyMCSensorDescription(
+        key="gps_vdop",
+        name="GPS VDOP",
+        icon="mdi:axis-z-arrow",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "gps", "accuracy", "vdop"),
+    ),
+    PyMCSensorDescription(
+        key="gps_datetime_utc",
+        name="GPS UTC time",
+        icon="mdi:clock-time-eight-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda data: _parse_datetime(_nested(data, "gps", "time", "datetime_utc")),
+        attrs_fn=lambda data: {
+            "utc_time": _nested(data, "gps", "time", "utc_time"),
+            "date": _nested(data, "gps", "time", "date"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="gps_location_update_state",
+        name="GPS location update state",
+        icon="mdi:map-marker-path",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _nested(data, "gps", "location_update", "state"),
+        attrs_fn=lambda data: {
+            "enabled": _nested(data, "gps", "location_update", "enabled"),
+            "last_attempt": _nested(data, "gps", "location_update", "last_attempt"),
+            "last_success": _nested(data, "gps", "location_update", "last_success"),
+            "last_error": _nested(data, "gps", "location_update", "last_error"),
+            "last_latitude": _nested(data, "gps", "location_update", "last_latitude"),
+            "last_longitude": _nested(data, "gps", "location_update", "last_longitude"),
+            "interval_seconds": _nested(data, "gps", "location_update", "interval_seconds"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="gps_checksum_valid_count",
+        name="GPS valid checksums",
+        icon="mdi:check-decagram-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "gps", "nmea", "valid_checksum_count"),
+        attrs_fn=lambda data: {
+            "invalid_checksum_count": _nested(
+                data, "gps", "nmea", "invalid_checksum_count"
+            ),
+            "missing_checksum_count": _nested(
+                data, "gps", "nmea", "missing_checksum_count"
+            ),
+        },
+    ),
+    PyMCSensorDescription(
+        key="gps_last_sentence_type",
+        name="GPS last sentence type",
+        icon="mdi:message-text-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _nested(data, "gps", "nmea", "last_sentence_type"),
+        attrs_fn=lambda data: {
+            "last_talker": _nested(data, "gps", "nmea", "last_talker"),
+            "last_sentence": _nested(data, "gps", "nmea", "last_sentence"),
+            "seen_sentence_types": _nested(data, "gps", "nmea", "seen_sentence_types"),
+            "sentence_counters": _nested(data, "gps", "nmea", "sentence_counters"),
+            "recent_sentences": _nested(data, "gps", "nmea", "recent_sentences"),
+            "raw_attributes": _nested(data, "gps", "raw_attributes"),
         },
     ),
     PyMCSensorDescription(

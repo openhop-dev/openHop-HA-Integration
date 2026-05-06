@@ -1,12 +1,14 @@
 {
   "domain": "pymc_repeater",
   "name": "pyMC Repeater",
-  "codeowners": ["@pyMC-dev"],
+  "codeowners": [
+    "@pyMC-dev"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/pyMC-dev/pyMC-HA-Integration",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/pyMC-dev/pyMC-HA-Integration/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
