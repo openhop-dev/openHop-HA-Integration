@@ -49,6 +49,8 @@ SERVICE_GET_LOGS = "get_logs"
 SERVICE_GET_RECENT_PACKETS = "get_recent_packets"
 SERVICE_GET_FILTERED_PACKETS = "get_filtered_packets"
 SERVICE_GET_PACKET_BY_HASH = "get_packet_by_hash"
+SERVICE_GET_ADVERTS_BY_CONTACT_TYPE = "get_adverts_by_contact_type"
+SERVICE_GET_ADVERTS_COUNT_BY_CONTACT_TYPE = "get_adverts_count_by_contact_type"
 SERVICE_GET_ACL_CLIENTS = "get_acl_clients"
 SERVICE_REMOVE_ACL_CLIENT = "remove_acl_client"
 SERVICE_GET_ROOM_MESSAGES = "get_room_messages"
@@ -605,6 +607,52 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("packet_hash"): str,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_ADVERTS_BY_CONTACT_TYPE,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_adverts_by_contact_type(
+                contact_type=call.data["contact_type"],
+                limit=call.data.get("limit", 100),
+                offset=call.data.get("offset", 0),
+                hours=call.data.get("hours"),
+            ),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Required("contact_type"): str,
+                vol.Optional("limit", default=100): vol.Coerce(int),
+                vol.Optional("offset", default=0): vol.Coerce(int),
+                vol.Optional("hours"): vol.Coerce(int),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_ADVERTS_COUNT_BY_CONTACT_TYPE,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_adverts_count_by_contact_type(
+                contact_type=call.data["contact_type"],
+                hours=call.data.get("hours"),
+            ),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Required("contact_type"): str,
+                vol.Optional("hours"): vol.Coerce(int),
             }
         ),
         supports_response=SupportsResponse.ONLY,

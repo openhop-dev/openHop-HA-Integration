@@ -76,6 +76,20 @@ def _update_channel_options(data: dict[str, Any]) -> list[str]:
     return options
 
 
+def _gps_position_attrs(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "gps_position": _nested(data, "gps", "gps_position"),
+        "manual_position": _nested(data, "gps", "manual_position"),
+        "position_source": _nested(data, "gps", "position_meta", "source"),
+        "position_source_label": _nested(data, "gps", "position_meta", "source_label"),
+        "position_policy": _nested(data, "gps", "position_meta", "policy"),
+        "manual_config_available": _nested(
+            data, "gps", "position_meta", "manual_config_available"
+        ),
+        "gps_fix_valid": _nested(data, "gps", "position_meta", "gps_fix_valid"),
+    }
+
+
 def _transport_key_count(data: dict[str, Any]) -> int:
     keys = data.get("transport_keys") or []
     return len(keys) if isinstance(keys, list) else 0
@@ -211,7 +225,18 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
             "last_update": _nested(data, "gps", "status", "last_update"),
             "last_error": _nested(data, "gps", "status", "last_error"),
             "source": _nested(data, "gps", "source"),
+            "time_sync_state": _nested(data, "gps", "time_sync", "state"),
+            **_gps_position_attrs(data),
         },
+    ),
+    PyMCSensorDescription(
+        key="gps_position_source",
+        name="GPS position source",
+        icon="mdi:crosshairs-question",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _nested(data, "gps", "position_meta", "source_label")
+        or _nested(data, "gps", "position_meta", "source"),
+        attrs_fn=_gps_position_attrs,
     ),
     PyMCSensorDescription(
         key="gps_quality",
@@ -233,6 +258,7 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _nested(data, "gps", "position", "latitude"),
+        attrs_fn=_gps_position_attrs,
     ),
     PyMCSensorDescription(
         key="gps_longitude",
@@ -241,6 +267,7 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _nested(data, "gps", "position", "longitude"),
+        attrs_fn=_gps_position_attrs,
     ),
     PyMCSensorDescription(
         key="gps_altitude",
@@ -339,6 +366,23 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         attrs_fn=lambda data: {
             "utc_time": _nested(data, "gps", "time", "utc_time"),
             "date": _nested(data, "gps", "time", "date"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="gps_time_sync_state",
+        name="GPS time sync state",
+        icon="mdi:clock-sync-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _nested(data, "gps", "time_sync", "state"),
+        attrs_fn=lambda data: {
+            "enabled": _nested(data, "gps", "time_sync", "enabled"),
+            "last_attempt": _nested(data, "gps", "time_sync", "last_attempt"),
+            "last_success": _nested(data, "gps", "time_sync", "last_success"),
+            "last_error": _nested(data, "gps", "time_sync", "last_error"),
+            "last_gps_time": _nested(data, "gps", "time_sync", "last_gps_time"),
+            "last_offset_seconds": _nested(
+                data, "gps", "time_sync", "last_offset_seconds"
+            ),
         },
     ),
     PyMCSensorDescription(
@@ -575,7 +619,14 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         icon="mdi:download-network-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _nested(data, "stats", "rx_per_hour"),
+        value_fn=lambda data: _nested(data, "packet_stats_1h", "total_packets")
+        or _nested(data, "stats", "rx_per_hour"),
+        attrs_fn=lambda data: {
+            "source": "packet_stats_1h"
+            if _nested(data, "packet_stats_1h", "total_packets") is not None
+            else "stats",
+            "legacy_stats_rx_per_hour": _nested(data, "stats", "rx_per_hour"),
+        },
     ),
     PyMCSensorDescription(
         key="forwarded_per_hour",
@@ -584,7 +635,16 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         icon="mdi:upload-network-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _nested(data, "stats", "forwarded_per_hour"),
+        value_fn=lambda data: _nested(data, "packet_stats_1h", "transmitted_packets")
+        or _nested(data, "stats", "forwarded_per_hour"),
+        attrs_fn=lambda data: {
+            "source": "packet_stats_1h"
+            if _nested(data, "packet_stats_1h", "transmitted_packets") is not None
+            else "stats",
+            "legacy_stats_forwarded_per_hour": _nested(
+                data, "stats", "forwarded_per_hour"
+            ),
+        },
     ),
     PyMCSensorDescription(
         key="radio_utilization",

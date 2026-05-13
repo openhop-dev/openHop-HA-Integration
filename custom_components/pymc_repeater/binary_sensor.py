@@ -111,6 +111,13 @@ BINARY_SENSORS: tuple[PyMCBinarySensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: bool(_nested(data, "gps", "location_update", "enabled")),
     ),
+    PyMCBinarySensorDescription(
+        key="gps_time_sync_enabled",
+        name="GPS time sync enabled",
+        icon="mdi:clock-sync-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: bool(_nested(data, "gps", "time_sync", "enabled")),
+    ),
 )
 
 

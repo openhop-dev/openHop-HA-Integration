@@ -130,6 +130,7 @@ class PyMCRepeaterApiClient:
             "hardware_processes": self.async_get_hardware_processes(),
             "mqtt_status": self.async_get_mqtt_status(),
             "packet_stats": self.async_get_packet_stats(),
+            "packet_stats_1h": self.async_get_packet_stats(hours=1),
             "route_stats": self.async_get_route_stats(),
             "noise_floor_stats": self.async_get_noise_floor_stats(),
             "crc_error_count": self.async_get_crc_error_count(),
@@ -176,12 +177,14 @@ class PyMCRepeaterApiClient:
         """Return process summary stats."""
         return await self._async_request_wrapped("GET", "/api/hardware_processes")
 
-    async def async_get_packet_stats(self) -> dict[str, Any]:
+    async def async_get_packet_stats(
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS
+    ) -> dict[str, Any]:
         """Return packet stats."""
         return await self._async_request_wrapped(
             "GET",
             "/api/packet_stats",
-            params={"hours": DEFAULT_PACKET_WINDOW_HOURS},
+            params={"hours": hours},
         )
 
     async def async_get_route_stats(self) -> dict[str, Any]:
@@ -315,6 +318,56 @@ class PyMCRepeaterApiClient:
             "count": payload.get("count", len(packets)),
             "filters": payload.get("filters"),
         }
+
+    async def async_get_adverts_by_contact_type(
+        self,
+        *,
+        contact_type: str,
+        limit: int = 100,
+        offset: int = 0,
+        hours: int | None = None,
+    ) -> dict[str, Any]:
+        """Return adverts for one contact type."""
+        params: dict[str, Any] = {
+            "contact_type": contact_type,
+            "limit": limit,
+            "offset": offset,
+        }
+        if hours is not None:
+            params["hours"] = hours
+
+        payload = await self._async_request_json(
+            "GET",
+            "/api/adverts_by_contact_type",
+            params=params,
+            auth="api_token",
+        )
+        if payload.get("success") is False:
+            raise PyMCRepeaterApiError(
+                payload.get("error", "Failed to fetch adverts by contact type")
+            )
+        adverts = payload.get("data", [])
+        return {
+            "adverts": adverts,
+            "count": payload.get("count", len(adverts)),
+            "filters": payload.get("filters"),
+        }
+
+    async def async_get_adverts_count_by_contact_type(
+        self,
+        *,
+        contact_type: str,
+        hours: int | None = None,
+    ) -> dict[str, Any]:
+        """Return the total advert count for one contact type."""
+        params: dict[str, Any] = {"contact_type": contact_type}
+        if hours is not None:
+            params["hours"] = hours
+        return await self._async_request_wrapped(
+            "GET",
+            "/api/adverts_count_by_contact_type",
+            params=params,
+        )
 
     async def async_get_packet_by_hash(self, packet_hash: str) -> dict[str, Any]:
         """Return one stored packet by packet hash."""

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- fixed the `Packets received per hour` and `Packets forwarded per hour` sensors to use `/api/packet_stats?hours=1` instead of the repeater status counters backed by the capped `recent_packets` buffer
+- added newer GPS diagnostics fields from recent repeater API updates, including position source metadata and GPS time sync state
+- added Home Assistant actions for `adverts_by_contact_type` and `adverts_count_by_contact_type`
+
 ## 1.1.1
 
 - stopped polling GitHub branch data every 60 seconds by removing `update_channels` from the normal integration refresh loop
