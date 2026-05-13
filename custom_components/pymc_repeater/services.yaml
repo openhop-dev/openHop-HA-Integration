@@ -444,6 +444,58 @@ get_packet_by_hash:
       selector:
         text:
 
+get_adverts_by_contact_type:
+  name: Get adverts by contact type
+  description: Return adverts for one contact type, with paging support.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    contact_type:
+      required: true
+      selector:
+        text:
+    limit:
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 5000
+          mode: box
+    offset:
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100000
+          mode: box
+    hours:
+      selector:
+        number:
+          min: 1
+          max: 8760
+          mode: box
+
+get_adverts_count_by_contact_type:
+  name: Get advert count by contact type
+  description: Return the total advert count for one contact type.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    contact_type:
+      required: true
+      selector:
+        text:
+    hours:
+      selector:
+        number:
+          min: 1
+          max: 8760
+          mode: box
+
 get_acl_clients:
   name: Get ACL clients
   description: Return authenticated ACL clients, optionally filtered to one identity.
