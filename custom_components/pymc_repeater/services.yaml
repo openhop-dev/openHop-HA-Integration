@@ -370,6 +370,15 @@ companion_set_advert_location:
       selector:
         text:
 
+get_broker_presets:
+  name: Get broker presets
+  description: Return bundled MC2MQTT broker presets exposed by the repeater API.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+
 get_logs:
   name: Get logs
   description: Return the current pyMC repeater log buffer.

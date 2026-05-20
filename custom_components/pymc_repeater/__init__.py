@@ -46,6 +46,7 @@ SERVICE_COMPANION_RESET_PATH = "companion_reset_path"
 SERVICE_COMPANION_SET_ADVERT_NAME = "companion_set_advert_name"
 SERVICE_COMPANION_SET_ADVERT_LOCATION = "companion_set_advert_location"
 SERVICE_GET_LOGS = "get_logs"
+SERVICE_GET_BROKER_PRESETS = "get_broker_presets"
 SERVICE_GET_RECENT_PACKETS = "get_recent_packets"
 SERVICE_GET_FILTERED_PACKETS = "get_filtered_packets"
 SERVICE_GET_PACKET_BY_HASH = "get_packet_by_hash"
@@ -531,6 +532,22 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 vol.Optional("companion_name"): str,
             }
         ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_BROKER_PRESETS,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_broker_presets(),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
     )
 
     hass.services.async_register(
