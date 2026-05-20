@@ -260,6 +260,14 @@ class PyMCRepeaterApiClient:
         """Open the GPS SSE stream."""
         return await self._async_open_stream("GET", "/api/gps_stream")
 
+    async def async_get_broker_presets(self) -> dict[str, Any]:
+        """Return bundled MC2MQTT broker presets."""
+        presets = await self._async_request_wrapped("GET", "/api/broker_presets")
+        return {
+            "presets": presets,
+            "count": len(presets) if isinstance(presets, list) else 0,
+        }
+
     async def async_get_logs(self) -> dict[str, Any]:
         """Return buffered repeater logs."""
         payload = await self._async_request_json("GET", "/api/logs", auth="api_token")
