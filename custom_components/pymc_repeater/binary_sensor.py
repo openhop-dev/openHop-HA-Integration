@@ -158,20 +158,39 @@ async def async_setup_entry(
         if isinstance(companion, dict) and companion.get("companion_name"):
             entities.append(PyMCCompanionBridgeBinarySensor(entry, coordinator, companion))
 
-    for reading in _external_sensor_readings(coordinator.data):
-        if isinstance(reading, dict) and reading.get("name"):
-            entities.append(PyMCExternalSensorOkBinarySensor(entry, coordinator, reading))
+    external_sensor_unique_ids: set[str] = set()
+
+    def add_external_sensor_entities() -> None:
+        new_entities: list[BinarySensorEntity] = []
+        for reading in _external_sensor_readings(coordinator.data):
+            if not isinstance(reading, dict) or not reading.get("name"):
+                continue
+            ok_entity = PyMCExternalSensorOkBinarySensor(entry, coordinator, reading)
+            ok_unique_id = str(ok_entity.unique_id)
+            if ok_unique_id not in external_sensor_unique_ids:
+                external_sensor_unique_ids.add(ok_unique_id)
+                new_entities.append(ok_entity)
+
             payload = reading.get("data") or {}
-            if isinstance(payload, dict):
-                for field, value in payload.items():
-                    if isinstance(value, bool):
-                        entities.append(
-                            PyMCExternalSensorFlagBinarySensor(
-                                entry, coordinator, reading, str(field)
-                            )
-                        )
+            if not isinstance(payload, dict):
+                continue
+            for field, value in payload.items():
+                if not isinstance(value, bool):
+                    continue
+                flag_entity = PyMCExternalSensorFlagBinarySensor(
+                    entry, coordinator, reading, str(field)
+                )
+                flag_unique_id = str(flag_entity.unique_id)
+                if flag_unique_id in external_sensor_unique_ids:
+                    continue
+                external_sensor_unique_ids.add(flag_unique_id)
+                new_entities.append(flag_entity)
+        if new_entities:
+            async_add_entities(new_entities)
 
     async_add_entities(entities)
+    add_external_sensor_entities()
+    entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
 
 
 class PyMCBinarySensorEntity(PyMCBaseEntity, BinarySensorEntity):

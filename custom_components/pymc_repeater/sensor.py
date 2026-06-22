@@ -1022,11 +1022,25 @@ async def async_setup_entry(
                 ]
             )
 
-    for reading, field, _value in _external_sensor_data_items(coordinator.data):
-        if isinstance(reading, dict) and reading.get("name"):
-            entities.append(PyMCExternalSensorMetricSensor(entry, coordinator, reading, field))
+    external_sensor_unique_ids: set[str] = set()
+
+    def add_external_sensor_entities() -> None:
+        new_entities: list[SensorEntity] = []
+        for reading, field, _value in _external_sensor_data_items(coordinator.data):
+            if not isinstance(reading, dict) or not reading.get("name"):
+                continue
+            entity = PyMCExternalSensorMetricSensor(entry, coordinator, reading, field)
+            unique_id = str(entity.unique_id)
+            if unique_id in external_sensor_unique_ids:
+                continue
+            external_sensor_unique_ids.add(unique_id)
+            new_entities.append(entity)
+        if new_entities:
+            async_add_entities(new_entities)
 
     async_add_entities(entities)
+    add_external_sensor_entities()
+    entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
 
 
 class PyMCBaseEntity(CoordinatorEntity):
