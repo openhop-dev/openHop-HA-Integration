@@ -18,7 +18,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
 from .const import DOMAIN
-from .sensor import PyMCBaseEntity, _companion_items, _nested, _room_items
+from .sensor import (
+    PyMCBaseEntity,
+    _companion_items,
+    _external_sensor_identity,
+    _external_sensor_readings,
+    _nested,
+    _room_items,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -150,6 +157,19 @@ async def async_setup_entry(
     for companion in _companion_items(coordinator.data):
         if isinstance(companion, dict) and companion.get("companion_name"):
             entities.append(PyMCCompanionBridgeBinarySensor(entry, coordinator, companion))
+
+    for reading in _external_sensor_readings(coordinator.data):
+        if isinstance(reading, dict) and reading.get("name"):
+            entities.append(PyMCExternalSensorOkBinarySensor(entry, coordinator, reading))
+            payload = reading.get("data") or {}
+            if isinstance(payload, dict):
+                for field, value in payload.items():
+                    if isinstance(value, bool):
+                        entities.append(
+                            PyMCExternalSensorFlagBinarySensor(
+                                entry, coordinator, reading, str(field)
+                            )
+                        )
 
     async_add_entities(entities)
 
@@ -359,3 +379,77 @@ class PyMCCompanionBridgeBinarySensor(PyMCBaseEntity, BinarySensorEntity):
             "contacts_count": companion.get("contacts_count"),
             "channels_count": companion.get("channels_count"),
         }
+
+
+class PyMCExternalSensorOkBinarySensor(PyMCBaseEntity, BinarySensorEntity):
+    """Binary sensor showing whether a configured repeater sensor read succeeded."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:check-network-outline"
+
+    def __init__(self, entry: ConfigEntry, coordinator, reading: dict[str, Any]) -> None:
+        super().__init__(entry, coordinator)
+        self._identity = _external_sensor_identity(reading)
+        self._attr_name = f"Sensor {reading.get('name') or 'sensor'} OK"
+        self._attr_unique_id = (
+            f"{entry.unique_id or entry.entry_id}_external_sensor_{self._identity}_ok"
+        )
+
+    def _get_reading(self) -> dict[str, Any] | None:
+        for reading in _external_sensor_readings(self.coordinator.data):
+            if isinstance(reading, dict) and _external_sensor_identity(reading) == self._identity:
+                return reading
+        return None
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._get_reading() is not None
+
+    @property
+    def is_on(self) -> bool:
+        reading = self._get_reading() or {}
+        return bool(reading.get("ok"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        reading = self._get_reading() or {}
+        return {
+            "sensor_name": reading.get("name"),
+            "sensor_type": reading.get("type"),
+            "timestamp": reading.get("timestamp"),
+            "error": reading.get("error"),
+        }
+
+
+class PyMCExternalSensorFlagBinarySensor(PyMCExternalSensorOkBinarySensor):
+    """Binary sensor for boolean fields returned by repeater sensor plug-ins."""
+
+    _attr_icon = "mdi:toggle-switch-outline"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator,
+        reading: dict[str, Any],
+        field: str,
+    ) -> None:
+        super().__init__(entry, coordinator, reading)
+        self._field = field
+        self._attr_name = f"Sensor {reading.get('name') or 'sensor'} {field.replace('_', ' ')}"
+        self._attr_unique_id = (
+            f"{entry.unique_id or entry.entry_id}_external_sensor_{self._identity}_"
+            f"{slugify(field) or 'flag'}"
+        )
+
+    @property
+    def available(self) -> bool:
+        reading = self._get_reading()
+        payload = reading.get("data") if isinstance(reading, dict) else None
+        return super().available and isinstance(payload, dict) and self._field in payload
+
+    @property
+    def is_on(self) -> bool:
+        reading = self._get_reading() or {}
+        payload = reading.get("data") or {}
+        return bool(payload.get(self._field)) if isinstance(payload, dict) else False

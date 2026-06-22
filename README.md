@@ -10,7 +10,7 @@ This integration connects directly to the repeater's local HTTP API, signs in on
 - Prompts for repeater IP or hostname, port, and admin password
 - Automatically creates a dedicated API token for Home Assistant
 - Stores the API token instead of the admin password after setup
-- Polls repeater telemetry, packet stats, radio metrics, hardware stats, database stats, MQTT status, ACL stats, and identity totals
+- Polls repeater telemetry, packet stats, radio metrics, hardware stats, database stats, MQTT status, ACL stats, identity totals, and configured Repeater sensor-manager readings
 - Exposes Home Assistant sensors and binary sensors for easy dashboards, history graphs, and automations
 
 ## Requirements
@@ -94,6 +94,7 @@ Version `1.0.0` includes entities for:
 - registered identity totals
 - database size
 - CPU, memory, disk usage, and uptime
+- configured Repeater sensor plug-ins, including numeric/string readings and boolean flags from the latest sensor-manager payload
 
 ## Dashboard template
 

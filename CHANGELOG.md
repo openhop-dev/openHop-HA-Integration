@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4
+
+- added Home Assistant entities for the Repeater dev sensor-manager summary and configured sensor plug-in readings, including UPS/power/environment values and boolean flags exposed under `stats.sensors.readings`
+
 ## 1.1.3
 
 - added a Home Assistant action for the new repeater `broker_presets` API endpoint so bundled MC2MQTT broker templates can be queried from HA
