@@ -1,4 +1,4 @@
-# pyMC Repeater dashboard template
+# openHop Repeater dashboard template
 #
 # Replace every instance of REPEATER_SLUG with your real entity prefix.
 # Example:
@@ -13,7 +13,7 @@
 # view below, swap the example placeholders for the broker/companion entity IDs
 # that exist in your Home Assistant instance.
 
-title: pyMC Repeater
+title: openHop Repeater
 views:
   - title: Overview
     path: overview
@@ -22,7 +22,7 @@ views:
     cards:
       - type: markdown
         content: |
-          # pyMC Repeater
+          # openHop Repeater
           Clean operational view for radio health, MQTT state, packet flow, and system load.
 
       - type: grid

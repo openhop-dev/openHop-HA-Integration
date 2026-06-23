@@ -1,4 +1,4 @@
-"""Config flow for pyMC Repeater."""
+"""Config flow for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ async def _async_validate_and_bootstrap(
 
 
 class PyMCRepeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for pyMC Repeater."""
+    """Handle a config flow for openHop Repeater."""
 
     VERSION = 1
 
@@ -188,7 +188,7 @@ class PyMCRepeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
-    """Handle pyMC Repeater options."""
+    """Handle openHop Repeater options."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry

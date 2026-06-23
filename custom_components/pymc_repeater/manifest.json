@@ -1,8 +1,8 @@
 {
   "domain": "pymc_repeater",
-  "name": "pyMC Repeater",
+  "name": "openHop Repeater",
   "codeowners": [
-    "@pyMC-dev"
+    "@openHop-dev"
   ],
   "config_flow": true,
   "documentation": "https://github.com/pyMC-dev/pyMC-HA-Integration",

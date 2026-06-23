@@ -1,4 +1,4 @@
-"""Diagnostics support for pyMC Repeater."""
+"""Diagnostics support for openHop Repeater."""
 
 from __future__ import annotations
 

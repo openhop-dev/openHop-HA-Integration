@@ -1,4 +1,4 @@
-"""Binary sensors for pyMC Repeater."""
+"""Binary sensors for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater binary sensors."""
+    """Set up openHop Repeater binary sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[BinarySensorEntity] = [
         PyMCBinarySensorEntity(entry, coordinator, description)
@@ -194,7 +194,7 @@ async def async_setup_entry(
 
 
 class PyMCBinarySensorEntity(PyMCBaseEntity, BinarySensorEntity):
-    """Representation of a pyMC Repeater binary sensor."""
+    """Representation of an openHop Repeater binary sensor."""
 
     entity_description: PyMCBinarySensorDescription
 

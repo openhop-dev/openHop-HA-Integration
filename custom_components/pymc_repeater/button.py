@@ -1,4 +1,4 @@
-"""Button entities for pyMC Repeater."""
+"""Button entities for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .sensor import PyMCBaseEntity
 
 @dataclass(frozen=True, kw_only=True)
 class PyMCButtonDescription(ButtonEntityDescription):
-    """Description for a pyMC button."""
+    """Description for an openHop button."""
 
     press_fn: Callable[[object], Awaitable[object]]
     refresh_after: bool = True
@@ -69,14 +69,14 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater buttons."""
+    """Set up openHop Repeater buttons."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     api = hass.data[DOMAIN][entry.entry_id]["api"]
     async_add_entities(PyMCButtonEntity(entry, coordinator, api, desc) for desc in BUTTONS)
 
 
 class PyMCButtonEntity(PyMCBaseEntity, ButtonEntity):
-    """A pyMC button entity."""
+    """An openHop button entity."""
 
     entity_description: PyMCButtonDescription
 

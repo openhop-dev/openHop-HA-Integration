@@ -1,4 +1,4 @@
-"""Select entities for pyMC Repeater."""
+"""Select entities for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater selects."""
+    """Set up openHop Repeater selects."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     api = hass.data[DOMAIN][entry.entry_id]["api"]
     async_add_entities(

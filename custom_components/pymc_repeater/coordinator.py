@@ -1,4 +1,4 @@
-"""Data coordinator for pyMC Repeater."""
+"""Data coordinator for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ GPS_STREAM_RETRY_SECONDS = 15
 
 
 class PyMCRepeaterDataUpdateCoordinator(DataUpdateCoordinator[dict]):
-    """Coordinate pyMC Repeater polling."""
+    """Coordinate openHop Repeater polling."""
 
     def __init__(
         self,

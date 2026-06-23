@@ -1,4 +1,4 @@
-"""Sensor platform for pyMC Repeater."""
+"""Sensor platform for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -180,7 +180,7 @@ def _convert_data_size(value_bytes: float | int | None, unit: str) -> float | in
 
 @dataclass(frozen=True, kw_only=True)
 class PyMCSensorDescription(SensorEntityDescription):
-    """Describes a pyMC sensor."""
+    """Describes an openHop sensor."""
 
     value_fn: Callable[[dict[str, Any]], Any]
     attrs_fn: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
@@ -981,7 +981,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater sensors."""
+    """Set up openHop Repeater sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[SensorEntity] = [
         PyMCSensorEntity(entry, coordinator, description) for description in SENSORS
@@ -1044,7 +1044,7 @@ async def async_setup_entry(
 
 
 class PyMCBaseEntity(CoordinatorEntity):
-    """Common entity behavior for pyMC Repeater."""
+    """Common entity behavior for openHop Repeater."""
 
     _attr_has_entity_name = True
 
@@ -1066,7 +1066,7 @@ class PyMCBaseEntity(CoordinatorEntity):
 
 
 class PyMCSensorEntity(PyMCBaseEntity, SensorEntity):
-    """Representation of a pyMC Repeater sensor."""
+    """Representation of an openHop Repeater sensor."""
 
     entity_description: PyMCSensorDescription
 

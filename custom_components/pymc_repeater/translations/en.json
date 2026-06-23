@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to pyMC Repeater",
+        "title": "Connect to openHop Repeater",
         "description": "Enter the repeater connection details. Home Assistant will log in once, create a dedicated API token, and then store only that token.",
         "data": {
           "host": "Repeater IP address or hostname",
@@ -11,7 +11,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Reconnect to pyMC Repeater",
+        "title": "Reconnect to openHop Repeater",
         "description": "The saved API token is no longer valid. Enter the current admin password to create a new token.",
         "data": {
           "password": "Admin password"
@@ -32,8 +32,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "pyMC Repeater options",
-        "description": "Adjust how selected pyMC Repeater values are shown in Home Assistant.",
+        "title": "openHop Repeater options",
+        "description": "Adjust how selected openHop Repeater values are shown in Home Assistant.",
         "data": {
           "data_size_unit": "Data size display unit",
           "uptime_unit": "System uptime display unit"
