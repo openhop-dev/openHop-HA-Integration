@@ -1,4 +1,4 @@
-"""Switch entities for pyMC Repeater."""
+"""Switch entities for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .sensor import PyMCBaseEntity, _nested
 
 @dataclass(frozen=True, kw_only=True)
 class PyMCSwitchDescription:
-    """Description for a pyMC switch."""
+    """Description for an openHop switch."""
 
     key: str
     name: str
@@ -88,14 +88,14 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater switches."""
+    """Set up openHop Repeater switches."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     api = hass.data[DOMAIN][entry.entry_id]["api"]
     async_add_entities(PyMCSwitchEntity(entry, coordinator, api, desc) for desc in SWITCHES)
 
 
 class PyMCSwitchEntity(PyMCBaseEntity, SwitchEntity):
-    """A pyMC switch entity."""
+    """An openHop switch entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_has_entity_name = True

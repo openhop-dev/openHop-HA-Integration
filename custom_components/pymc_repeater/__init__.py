@@ -1,4 +1,4 @@
-"""The pyMC Repeater integration."""
+"""The openHop Repeater integration."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up pyMC Repeater from a config entry."""
+    """Set up openHop Repeater from a config entry."""
     session = async_get_clientsession(hass)
     api = PyMCRepeaterApiClient(
         session=session,
@@ -116,19 +116,19 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 def _resolve_entry_id(hass: HomeAssistant, service_data: dict) -> str:
     entries = hass.data.get(DOMAIN, {})
     if not entries:
-        raise HomeAssistantError("No pyMC Repeater entries are loaded")
+        raise HomeAssistantError("No openHop Repeater entries are loaded")
 
     requested = service_data.get(CONF_ENTRY_ID) or service_data.get(LEGACY_CONF_ENTRY_ID)
     if requested:
         if requested not in entries:
-            raise HomeAssistantError(f"Unknown pyMC Repeater entry_id: {requested}")
+            raise HomeAssistantError(f"Unknown openHop Repeater entry_id: {requested}")
         return requested
 
     if len(entries) == 1:
         return next(iter(entries))
 
     raise HomeAssistantError(
-        "Multiple pyMC Repeater entries are configured; provide entry_id"
+        "Multiple openHop Repeater entries are configured; provide entry_id"
     )
 
 

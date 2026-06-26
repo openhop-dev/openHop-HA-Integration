@@ -1,4 +1,4 @@
-"""Sensor platform for pyMC Repeater."""
+"""Sensor platform for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -106,6 +106,35 @@ def _companion_items(data: dict[str, Any]) -> list[dict[str, Any]]:
     return payload if isinstance(payload, list) else []
 
 
+def _external_sensor_readings(data: dict[str, Any]) -> list[dict[str, Any]]:
+    readings = _nested(data, "stats", "sensors", "readings") or []
+    return readings if isinstance(readings, list) else []
+
+
+def _external_sensor_identity(reading: dict[str, Any]) -> str:
+    name = str(reading.get("name") or "sensor")
+    sensor_type = str(reading.get("type") or "sensor")
+    return slugify(f"{name}_{sensor_type}") or "sensor"
+
+
+def _external_sensor_data_items(data: dict[str, Any]) -> list[tuple[dict[str, Any], str, Any]]:
+    items: list[tuple[dict[str, Any], str, Any]] = []
+    for reading in _external_sensor_readings(data):
+        if not isinstance(reading, dict):
+            continue
+        payload = reading.get("data") or {}
+        if not isinstance(payload, dict):
+            continue
+        for key, value in payload.items():
+            if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                items.append((reading, str(key), value))
+    return items
+
+
+def _external_sensor_ok_count(data: dict[str, Any]) -> int:
+    return sum(1 for reading in _external_sensor_readings(data) if reading.get("ok"))
+
+
 def _running_companion_bridges(data: dict[str, Any]) -> int:
     return sum(1 for item in _companion_items(data) if item.get("is_running"))
 
@@ -151,7 +180,7 @@ def _convert_data_size(value_bytes: float | int | None, unit: str) -> float | in
 
 @dataclass(frozen=True, kw_only=True)
 class PyMCSensorDescription(SensorEntityDescription):
-    """Describes a pyMC sensor."""
+    """Describes an openHop sensor."""
 
     value_fn: Callable[[dict[str, Any]], Any]
     attrs_fn: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
@@ -604,6 +633,31 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         attrs_fn=lambda data: {"companions": _companion_items(data)},
     ),
     PyMCSensorDescription(
+        key="external_sensors_loaded",
+        name="External sensors loaded",
+        icon="mdi:chip",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "stats", "sensors", "loaded"),
+        attrs_fn=lambda data: {
+            "enabled": _nested(data, "stats", "sensors", "enabled"),
+            "configured": _nested(data, "stats", "sensors", "configured"),
+            "running": _nested(data, "stats", "sensors", "running"),
+            "poll_interval_seconds": _nested(
+                data, "stats", "sensors", "poll_interval_seconds"
+            ),
+        },
+    ),
+    PyMCSensorDescription(
+        key="external_sensor_readings_ok",
+        name="External sensor readings OK",
+        icon="mdi:check-network-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_external_sensor_ok_count,
+        attrs_fn=lambda data: {"readings": _external_sensor_readings(data)},
+    ),
+    PyMCSensorDescription(
         key="room_servers",
         name="Room servers",
         icon="mdi:chat-processing-outline",
@@ -927,7 +981,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater sensors."""
+    """Set up openHop Repeater sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[SensorEntity] = [
         PyMCSensorEntity(entry, coordinator, description) for description in SENSORS
@@ -968,11 +1022,29 @@ async def async_setup_entry(
                 ]
             )
 
+    external_sensor_unique_ids: set[str] = set()
+
+    def add_external_sensor_entities() -> None:
+        new_entities: list[SensorEntity] = []
+        for reading, field, _value in _external_sensor_data_items(coordinator.data):
+            if not isinstance(reading, dict) or not reading.get("name"):
+                continue
+            entity = PyMCExternalSensorMetricSensor(entry, coordinator, reading, field)
+            unique_id = str(entity.unique_id)
+            if unique_id in external_sensor_unique_ids:
+                continue
+            external_sensor_unique_ids.add(unique_id)
+            new_entities.append(entity)
+        if new_entities:
+            async_add_entities(new_entities)
+
     async_add_entities(entities)
+    add_external_sensor_entities()
+    entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
 
 
 class PyMCBaseEntity(CoordinatorEntity):
-    """Common entity behavior for pyMC Repeater."""
+    """Common entity behavior for openHop Repeater."""
 
     _attr_has_entity_name = True
 
@@ -994,7 +1066,7 @@ class PyMCBaseEntity(CoordinatorEntity):
 
 
 class PyMCSensorEntity(PyMCBaseEntity, SensorEntity):
-    """Representation of a pyMC Repeater sensor."""
+    """Representation of an openHop Repeater sensor."""
 
     entity_description: PyMCSensorDescription
 
@@ -1189,6 +1261,95 @@ class PyMCCompanionMetricSensor(PyMCBaseEntity, SensorEntity):
             "node_name": companion.get("node_name"),
             "public_key": companion.get("public_key"),
             "is_running": companion.get("is_running"),
+        }
+
+
+class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
+    """Dynamic sensor-manager metric from the repeater stats payload."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    _UNIT_HINTS = {
+        "battery_percent": PERCENTAGE,
+        "humidity_pct": PERCENTAGE,
+        "bus_voltage_v": "V",
+        "shunt_voltage_v": "V",
+        "battery_voltage_mv": "mV",
+        "vbus_voltage_mv": "mV",
+        "shunt_voltage_mv": "mV",
+        "current_ma": "mA",
+        "battery_current_ma": "mA",
+        "vbus_current_ma": "mA",
+        "power_mw": "mW",
+        "vbus_power_mw": "mW",
+        "remaining_capacity_mah": "mAh",
+        "time_to_empty_min": UnitOfTime.MINUTES,
+        "time_to_full_min": UnitOfTime.MINUTES,
+        "temperature_c": "°C",
+        "temperature_f": "°F",
+    }
+    _ICON_HINTS = {
+        "battery_percent": "mdi:battery",
+        "charge_state": "mdi:battery-sync-outline",
+        "temperature_c": "mdi:thermometer",
+        "temperature_f": "mdi:thermometer",
+        "humidity_pct": "mdi:water-percent",
+    }
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator,
+        reading: dict[str, Any],
+        field: str,
+    ) -> None:
+        super().__init__(entry, coordinator)
+        self._sensor_name = str(reading.get("name") or "sensor")
+        self._sensor_type = str(reading.get("type") or "sensor")
+        self._identity = _external_sensor_identity(reading)
+        self._field = field
+        friendly_field = field.replace("_", " ")
+        self._attr_name = f"Sensor {self._sensor_name} {friendly_field}"
+        self._attr_unique_id = (
+            f"{entry.unique_id or entry.entry_id}_external_sensor_"
+            f"{self._identity}_{slugify(field) or 'value'}"
+        )
+        self._attr_icon = self._ICON_HINTS.get(field, "mdi:chip")
+        self._attr_native_unit_of_measurement = self._UNIT_HINTS.get(field)
+        self._attr_state_class = (
+            SensorStateClass.MEASUREMENT if self._attr_native_unit_of_measurement else None
+        )
+
+    def _get_reading(self) -> dict[str, Any] | None:
+        for reading in _external_sensor_readings(self.coordinator.data):
+            if not isinstance(reading, dict):
+                continue
+            if _external_sensor_identity(reading) == self._identity:
+                return reading
+        return None
+
+    @property
+    def available(self) -> bool:
+        reading = self._get_reading()
+        payload = reading.get("data") if isinstance(reading, dict) else None
+        return super().available and isinstance(payload, dict) and self._field in payload
+
+    @property
+    def native_value(self) -> Any:
+        reading = self._get_reading() or {}
+        payload = reading.get("data") or {}
+        return payload.get(self._field) if isinstance(payload, dict) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        reading = self._get_reading() or {}
+        return {
+            "sensor_name": reading.get("name"),
+            "sensor_type": reading.get("type"),
+            "ok": reading.get("ok"),
+            "timestamp": reading.get("timestamp"),
+            "error": reading.get("error"),
         }
 
 

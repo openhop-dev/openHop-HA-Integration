@@ -1,4 +1,4 @@
-"""Constants for the pyMC Repeater integration."""
+"""Constants for the openHop Repeater integration."""
 
 from datetime import timedelta
 
@@ -17,8 +17,8 @@ DEFAULT_DATA_SIZE_UNIT = "mebibytes"
 DEFAULT_PACKET_WINDOW_HOURS = 24
 DEFAULT_UPTIME_UNIT = "hours"
 
-MANUFACTURER = "pyMC"
-MODEL = "pyMC Repeater"
+MANUFACTURER = "openHop"
+MODEL = "openHop Repeater"
 
 CLIENT_ID_PREFIX = "home-assistant"
 

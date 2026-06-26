@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4
+
+- added Home Assistant entities for the Repeater dev sensor-manager summary and configured sensor plug-in readings, including UPS/power/environment values and boolean flags exposed under `stats.sensors.readings`
+- made sensor-manager entities appear when readings arrive after integration setup instead of requiring the readings to be present during the first Home Assistant entity setup pass
+- rebranded the Home Assistant integration, HACS name, dashboard title, diagnostics text, and bundled icons from pyMC Repeater to openHop Repeater while keeping the existing `pymc_repeater` integration domain for compatibility
+
 ## 1.1.3
 
 - added a Home Assistant action for the new repeater `broker_presets` API endpoint so bundled MC2MQTT broker templates can be queried from HA
@@ -33,7 +39,7 @@
 
 ## 1.0.0
 
-Initial stable release of the pyMC Repeater Home Assistant integration.
+Initial stable release of the openHop Repeater Home Assistant integration.
 
 - config flow setup using repeater host, port, and admin password
 - dedicated API token bootstrap and token-based polling

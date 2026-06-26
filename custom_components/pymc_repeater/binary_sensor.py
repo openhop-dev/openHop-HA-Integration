@@ -1,4 +1,4 @@
-"""Binary sensors for pyMC Repeater."""
+"""Binary sensors for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -18,7 +18,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import slugify
 
 from .const import DOMAIN
-from .sensor import PyMCBaseEntity, _companion_items, _nested, _room_items
+from .sensor import (
+    PyMCBaseEntity,
+    _companion_items,
+    _external_sensor_identity,
+    _external_sensor_readings,
+    _nested,
+    _room_items,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -126,7 +133,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater binary sensors."""
+    """Set up openHop Repeater binary sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[BinarySensorEntity] = [
         PyMCBinarySensorEntity(entry, coordinator, description)
@@ -151,11 +158,43 @@ async def async_setup_entry(
         if isinstance(companion, dict) and companion.get("companion_name"):
             entities.append(PyMCCompanionBridgeBinarySensor(entry, coordinator, companion))
 
+    external_sensor_unique_ids: set[str] = set()
+
+    def add_external_sensor_entities() -> None:
+        new_entities: list[BinarySensorEntity] = []
+        for reading in _external_sensor_readings(coordinator.data):
+            if not isinstance(reading, dict) or not reading.get("name"):
+                continue
+            ok_entity = PyMCExternalSensorOkBinarySensor(entry, coordinator, reading)
+            ok_unique_id = str(ok_entity.unique_id)
+            if ok_unique_id not in external_sensor_unique_ids:
+                external_sensor_unique_ids.add(ok_unique_id)
+                new_entities.append(ok_entity)
+
+            payload = reading.get("data") or {}
+            if not isinstance(payload, dict):
+                continue
+            for field, value in payload.items():
+                if not isinstance(value, bool):
+                    continue
+                flag_entity = PyMCExternalSensorFlagBinarySensor(
+                    entry, coordinator, reading, str(field)
+                )
+                flag_unique_id = str(flag_entity.unique_id)
+                if flag_unique_id in external_sensor_unique_ids:
+                    continue
+                external_sensor_unique_ids.add(flag_unique_id)
+                new_entities.append(flag_entity)
+        if new_entities:
+            async_add_entities(new_entities)
+
     async_add_entities(entities)
+    add_external_sensor_entities()
+    entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
 
 
 class PyMCBinarySensorEntity(PyMCBaseEntity, BinarySensorEntity):
-    """Representation of a pyMC Repeater binary sensor."""
+    """Representation of an openHop Repeater binary sensor."""
 
     entity_description: PyMCBinarySensorDescription
 
@@ -359,3 +398,77 @@ class PyMCCompanionBridgeBinarySensor(PyMCBaseEntity, BinarySensorEntity):
             "contacts_count": companion.get("contacts_count"),
             "channels_count": companion.get("channels_count"),
         }
+
+
+class PyMCExternalSensorOkBinarySensor(PyMCBaseEntity, BinarySensorEntity):
+    """Binary sensor showing whether a configured repeater sensor read succeeded."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:check-network-outline"
+
+    def __init__(self, entry: ConfigEntry, coordinator, reading: dict[str, Any]) -> None:
+        super().__init__(entry, coordinator)
+        self._identity = _external_sensor_identity(reading)
+        self._attr_name = f"Sensor {reading.get('name') or 'sensor'} OK"
+        self._attr_unique_id = (
+            f"{entry.unique_id or entry.entry_id}_external_sensor_{self._identity}_ok"
+        )
+
+    def _get_reading(self) -> dict[str, Any] | None:
+        for reading in _external_sensor_readings(self.coordinator.data):
+            if isinstance(reading, dict) and _external_sensor_identity(reading) == self._identity:
+                return reading
+        return None
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._get_reading() is not None
+
+    @property
+    def is_on(self) -> bool:
+        reading = self._get_reading() or {}
+        return bool(reading.get("ok"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        reading = self._get_reading() or {}
+        return {
+            "sensor_name": reading.get("name"),
+            "sensor_type": reading.get("type"),
+            "timestamp": reading.get("timestamp"),
+            "error": reading.get("error"),
+        }
+
+
+class PyMCExternalSensorFlagBinarySensor(PyMCExternalSensorOkBinarySensor):
+    """Binary sensor for boolean fields returned by repeater sensor plug-ins."""
+
+    _attr_icon = "mdi:toggle-switch-outline"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        coordinator,
+        reading: dict[str, Any],
+        field: str,
+    ) -> None:
+        super().__init__(entry, coordinator, reading)
+        self._field = field
+        self._attr_name = f"Sensor {reading.get('name') or 'sensor'} {field.replace('_', ' ')}"
+        self._attr_unique_id = (
+            f"{entry.unique_id or entry.entry_id}_external_sensor_{self._identity}_"
+            f"{slugify(field) or 'flag'}"
+        )
+
+    @property
+    def available(self) -> bool:
+        reading = self._get_reading()
+        payload = reading.get("data") if isinstance(reading, dict) else None
+        return super().available and isinstance(payload, dict) and self._field in payload
+
+    @property
+    def is_on(self) -> bool:
+        reading = self._get_reading() or {}
+        payload = reading.get("data") or {}
+        return bool(payload.get(self._field)) if isinstance(payload, dict) else False

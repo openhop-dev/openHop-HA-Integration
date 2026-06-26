@@ -1,4 +1,4 @@
-"""Number entities for pyMC Repeater."""
+"""Number entities for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .sensor import PyMCBaseEntity, _nested
 
 @dataclass(frozen=True, kw_only=True)
 class PyMCNumberDescription:
-    """Description for a pyMC number."""
+    """Description for an openHop number."""
 
     key: str
     name: str
@@ -282,14 +282,14 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up pyMC Repeater numbers."""
+    """Set up openHop Repeater numbers."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     api = hass.data[DOMAIN][entry.entry_id]["api"]
     async_add_entities(PyMCNumberEntity(entry, coordinator, api, desc) for desc in NUMBERS)
 
 
 class PyMCNumberEntity(PyMCBaseEntity, NumberEntity):
-    """A pyMC number entity."""
+    """An openHop number entity."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_has_entity_name = True

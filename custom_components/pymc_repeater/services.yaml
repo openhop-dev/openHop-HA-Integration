@@ -20,7 +20,7 @@ ping_neighbor:
 
 room_post_message:
   name: Post room message
-  description: Post a message to a pyMC room server.
+  description: Post a message to an openHop room server.
   fields:
     config_entry_id:
       selector:
@@ -128,7 +128,7 @@ save_cad_settings:
 
 db_purge:
   name: Purge database tables
-  description: Purge one or more pyMC database tables.
+  description: Purge one or more openHop database tables.
   fields:
     config_entry_id:
       selector:
@@ -167,7 +167,7 @@ update_mqtt_config:
 
 companion_send_text:
   name: Companion send text
-  description: Send a text message to a target through a pyMC companion bridge.
+  description: Send a text message to a target through an openHop companion bridge.
   fields:
     config_entry_id:
       selector:
@@ -381,7 +381,7 @@ get_broker_presets:
 
 get_logs:
   name: Get logs
-  description: Return the current pyMC repeater log buffer.
+  description: Return the current openHop repeater log buffer.
   fields:
     config_entry_id:
       selector:

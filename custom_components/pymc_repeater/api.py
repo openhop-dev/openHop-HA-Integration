@@ -1,4 +1,4 @@
-"""Async API client for pyMC Repeater."""
+"""Async API client for openHop Repeater."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ REQUEST_TIMEOUT = 10
 
 
 class PyMCRepeaterError(Exception):
-    """Base error for the pyMC Repeater client."""
+    """Base error for the openHop Repeater client."""
 
 
 class PyMCRepeaterCannotConnect(PyMCRepeaterError):
@@ -78,13 +78,13 @@ def normalize_host(value: str) -> str:
 
 
 def build_home_assistant_token_name(home_assistant_hostname: str | None = None) -> str:
-    """Build the pyMC API token label for this Home Assistant instance."""
+    """Build the openHop API token label for this Home Assistant instance."""
     hostname = (home_assistant_hostname or "").strip() or socket.gethostname()
     return f"Home Assistant ({hostname})"
 
 
 class PyMCRepeaterApiClient:
-    """HTTP client for pyMC Repeater."""
+    """HTTP client for openHop Repeater."""
 
     def __init__(
         self,
