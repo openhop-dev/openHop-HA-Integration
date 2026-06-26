@@ -83,21 +83,6 @@ During setup the integration will:
 5. Discard the admin password after the setup flow finishes
 6. Start polling repeater data automatically
 
-## What gets added to Home Assistant
-
-Version `1.1.4` includes entities for:
-
-- repeater version and build info
-- total, transmitted, and dropped packets
-- average RSSI, SNR, and TX delay
-- average noise floor
-- MQTT broker connection state
-- ACL client totals
-- registered identity totals
-- database size
-- CPU, memory, disk usage, and uptime
-- configured Repeater sensor plug-ins, including numeric/string readings and boolean flags from the latest sensor-manager payload
-
 ## Dashboard template
 
 A native Lovelace dashboard template is included at:
