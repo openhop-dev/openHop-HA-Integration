@@ -1,6 +1,6 @@
 # openHop Repeater for Home Assistant
 
-Custom Home Assistant integration for [openHop Repeater](https://github.com/rightup/pyMC_Repeater).
+Custom Home Assistant integration for [openHop Repeater](https://github.com/openhop-dev/openhop_repeater).
 
 This integration connects directly to the repeater's local HTTP API, signs in once with the admin password, creates a dedicated API token for Home Assistant, and then uses that token for ongoing polling and history-friendly logging inside HA.
 
@@ -17,7 +17,7 @@ The Home Assistant integration domain and folder remain `pymc_repeater` for comp
 
 ## Requirements
 
-- A running [openHop Repeater](https://github.com/rightup/pyMC_Repeater) instance
+- A running [openHop Repeater](https://github.com/openhop-dev/openhop_repeater) instance
 - The repeater web/API port reachable from Home Assistant
 - The repeater admin password
 - A trusted local network, VPN, or other secure path between Home Assistant and the repeater
@@ -34,7 +34,7 @@ This integration is intended to be installed in HACS as a custom repository.
 4. Paste:
 
    ```text
-   https://github.com/pyMC-dev/pyMC-HA-Integration
+   https://github.com/openhop-dev/openHop-HA-Integration
    ```
 
 5. Choose `Integration` as the category.
@@ -147,7 +147,7 @@ README.md
 
 - The config flow follows current Home Assistant custom integration patterns with `manifest.json`, `config_flow.py`, and `translations/en.json`
 - The integration uses coordinated polling rather than per-entity API calls
-- The client implementation matches the current [openHop Repeater](https://github.com/rightup/pyMC_Repeater) auth flow:
+- The client implementation matches the current [openHop Repeater](https://github.com/openhop-dev/openhop_repeater) auth flow:
   - `POST /auth/login`
   - `POST /api/auth/tokens`
   - ongoing reads with `X-API-Key`
