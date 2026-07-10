@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- added support for newer Repeater dev API data: packet type stats, LBT diagnostics, default region configuration, and dynamic update channels
+- added Home Assistant sensors/binary sensors/selects for default region and LBT/packet-type diagnostics
+
 ## 1.1.4
 
 - added Home Assistant entities for the Repeater dev sensor-manager summary and configured sensor plug-in readings, including UPS/power/environment values and boolean flags exposed under `stats.sensors.readings`

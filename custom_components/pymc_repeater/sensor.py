@@ -95,6 +95,48 @@ def _transport_key_count(data: dict[str, Any]) -> int:
     return len(keys) if isinstance(keys, list) else 0
 
 
+def _transport_key_names(data: dict[str, Any]) -> list[str]:
+    keys = data.get("transport_keys") or []
+    names: list[str] = []
+    if not isinstance(keys, list):
+        return names
+    for key in keys:
+        if not isinstance(key, dict):
+            continue
+        raw_name = str(key.get("name") or "").strip()
+        if not raw_name:
+            continue
+        display_name = raw_name[1:] if raw_name.startswith("#") else raw_name
+        if display_name and display_name not in names:
+            names.append(display_name)
+    return names
+
+
+def _default_region(data: dict[str, Any]) -> str | None:
+    configured = _nested(data, "default_region", "default_region")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    stats_region = _nested(data, "stats", "config", "mesh", "default_region")
+    if isinstance(stats_region, str) and stats_region.strip():
+        return stats_region.strip()
+    return None
+
+
+def _lbt_summary(data: dict[str, Any]) -> dict[str, Any]:
+    summary = _nested(data, "lbt_diagnostics", "summary") or {}
+    return summary if isinstance(summary, dict) else {}
+
+
+def _packet_type_totals(data: dict[str, Any]) -> dict[str, Any]:
+    stats = data.get("packet_type_stats") or {}
+    totals = stats.get("packet_type_totals") if isinstance(stats, dict) else None
+    return totals if isinstance(totals, dict) else {}
+
+
+def _packet_type_count(data: dict[str, Any]) -> int:
+    return len(_packet_type_totals(data))
+
+
 def _room_items(data: dict[str, Any]) -> list[dict[str, Any]]:
     payload = data.get("room_stats") or {}
     rooms = payload.get("rooms") if isinstance(payload, dict) else None
@@ -809,6 +851,91 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=_transport_key_count,
         attrs_fn=lambda data: {"keys": data.get("transport_keys")},
+    ),
+    PyMCSensorDescription(
+        key="default_region",
+        name="Default region",
+        icon="mdi:map-marker-radius-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _default_region(data) or "None",
+        attrs_fn=lambda data: {"available_regions": _transport_key_names(data)},
+    ),
+    PyMCSensorDescription(
+        key="packet_types_24h",
+        name="Packet types (24h)",
+        icon="mdi:format-list-bulleted-type",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_packet_type_count,
+        attrs_fn=lambda data: {
+            "packet_type_totals": _packet_type_totals(data),
+            "packet_type_percentages": _nested(data, "packet_type_stats", "packet_type_percentages"),
+            "total_packets": _nested(data, "packet_type_stats", "total_packets"),
+            "hours": _nested(data, "packet_type_stats", "hours"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="lbt_transmissions_24h",
+        name="LBT transmissions (24h)",
+        icon="mdi:radio-handheld",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _lbt_summary(data).get("total_transmissions"),
+        attrs_fn=lambda data: {
+            "total_attempts": _lbt_summary(data).get("total_attempts"),
+            "attempts_1": _lbt_summary(data).get("attempts_1"),
+            "attempts_2": _lbt_summary(data).get("attempts_2"),
+            "attempts_3": _lbt_summary(data).get("attempts_3"),
+            "attempts_4_plus": _lbt_summary(data).get("attempts_4_plus"),
+            "busy_channel_events": _lbt_summary(data).get("busy_channel_events"),
+            "severe_attempt_threshold": _lbt_summary(data).get("severe_attempt_threshold"),
+            "bucket_seconds": _nested(data, "lbt_diagnostics", "bucket_seconds"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="lbt_retry_rate_24h",
+        name="LBT retry rate (24h)",
+        icon="mdi:repeat-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _lbt_summary(data).get("retry_rate_pct"),
+        attrs_fn=lambda data: {
+            "retry_packets": _lbt_summary(data).get("retry_packets"),
+            "first_attempt_success_rate_pct": _lbt_summary(data).get(
+                "first_attempt_success_rate_pct"
+            ),
+            "worst_bucket": _lbt_summary(data).get("worst_bucket"),
+            "correlations": _nested(data, "lbt_diagnostics", "correlations"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="lbt_average_attempts_24h",
+        name="LBT average attempts (24h)",
+        icon="mdi:counter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _lbt_summary(data).get("avg_attempts"),
+        attrs_fn=lambda data: {
+            "median_attempts": _lbt_summary(data).get("median_attempts"),
+            "p95_attempts": _lbt_summary(data).get("p95_attempts"),
+            "max_attempts": _lbt_summary(data).get("max_attempts"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="lbt_severe_contention_24h",
+        name="LBT severe contention (24h)",
+        icon="mdi:alert-octagon-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _lbt_summary(data).get("severe_contention_count"),
+        attrs_fn=lambda data: {
+            "severe_contention_pct": _lbt_summary(data).get("severe_contention_pct"),
+            "attempts_3_plus": _lbt_summary(data).get("attempts_3_plus"),
+            "attempts_3_plus_pct": _lbt_summary(data).get("attempts_3_plus_pct"),
+            "attempts_4_plus_pct": _lbt_summary(data).get("attempts_4_plus_pct"),
+            "packet_types": _nested(data, "lbt_diagnostics", "packet_types"),
+        },
     ),
     PyMCSensorDescription(
         key="advert_tier",

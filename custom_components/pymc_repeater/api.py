@@ -142,8 +142,12 @@ class PyMCRepeaterApiClient:
             "transport_keys": self.async_get_transport_keys(),
             "room_stats": self.async_get_room_stats(),
             "update_status": self.async_get_update_status(),
+            "update_channels": self.async_get_update_channels(),
             "companions": self.async_get_companions(),
             "gps": self.async_get_gps(),
+            "packet_type_stats": self.async_get_packet_type_stats(),
+            "lbt_diagnostics": self.async_get_lbt_diagnostics(),
+            "default_region": self.async_get_default_region(),
         }
 
         results = await asyncio.gather(*endpoints.values(), return_exceptions=True)
@@ -184,6 +188,26 @@ class PyMCRepeaterApiClient:
         return await self._async_request_wrapped(
             "GET",
             "/api/packet_stats",
+            params={"hours": hours},
+        )
+
+    async def async_get_packet_type_stats(
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS
+    ) -> dict[str, Any]:
+        """Return packet type stats."""
+        return await self._async_request_wrapped(
+            "GET",
+            "/api/packet_type_stats",
+            params={"hours": hours},
+        )
+
+    async def async_get_lbt_diagnostics(
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS
+    ) -> dict[str, Any]:
+        """Return listen-before-talk diagnostics."""
+        return await self._async_request_wrapped(
+            "GET",
+            "/api/lbt_diagnostics",
             params={"hours": hours},
         )
 
@@ -235,6 +259,18 @@ class PyMCRepeaterApiClient:
     async def async_get_transport_keys(self) -> list[dict[str, Any]]:
         """Return transport keys."""
         return await self._async_request_wrapped("GET", "/api/transport_keys")
+
+    async def async_get_default_region(self) -> dict[str, Any]:
+        """Return mesh default region configuration."""
+        return await self._async_request_wrapped("GET", "/api/default_region")
+
+    async def async_set_default_region(self, default_region: str | None) -> dict[str, Any]:
+        """Set or clear the mesh default region."""
+        return await self._async_request_wrapped(
+            "POST",
+            "/api/default_region",
+            json_body={"default_region": default_region},
+        )
 
     async def async_get_room_stats(self) -> dict[str, Any]:
         """Return room server stats."""

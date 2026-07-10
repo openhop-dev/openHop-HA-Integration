@@ -23,6 +23,7 @@ from .sensor import (
     _companion_items,
     _external_sensor_identity,
     _external_sensor_readings,
+    _lbt_summary,
     _nested,
     _room_items,
 )
@@ -124,6 +125,13 @@ BINARY_SENSORS: tuple[PyMCBinarySensorDescription, ...] = (
         icon="mdi:clock-sync-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: bool(_nested(data, "gps", "time_sync", "enabled")),
+    ),
+    PyMCBinarySensorDescription(
+        key="lbt_data_available",
+        name="LBT data available",
+        icon="mdi:radio-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: bool(_lbt_summary(data).get("has_lbt_data")),
     ),
 )
 
