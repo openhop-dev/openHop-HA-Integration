@@ -281,9 +281,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
-                vol.Required("peak"): vol.Coerce(int),
-                vol.Required("min_val"): vol.Coerce(int),
-                vol.Optional("detection_rate", default=0): vol.Coerce(int),
+                vol.Required("peak"): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+                vol.Required("min_val"): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+                vol.Optional("detection_rate", default=0): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=255)
+                ),
             }
         ),
     )

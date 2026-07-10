@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.1.5
 
+- fixed the Home Assistant options flow crash on newer Home Assistant versions by avoiding assignment to the read-only `OptionsFlow.config_entry` property
+- aligned the CAD settings service validation with newer repeater API bounds for CAD thresholds
 - added support for newer Repeater dev API data: packet type stats, LBT diagnostics, default region configuration, and dynamic update channels
 - added Home Assistant sensors/binary sensors/selects for default region and LBT/packet-type diagnostics
 
