@@ -191,7 +191,7 @@ class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
     """Handle openHop Repeater options."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -200,8 +200,8 @@ class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_unit = self.config_entry.options.get(CONF_UPTIME_UNIT, DEFAULT_UPTIME_UNIT)
-        current_data_size_unit = self.config_entry.options.get(
+        current_unit = self._config_entry.options.get(CONF_UPTIME_UNIT, DEFAULT_UPTIME_UNIT)
+        current_data_size_unit = self._config_entry.options.get(
             CONF_DATA_SIZE_UNIT, DEFAULT_DATA_SIZE_UNIT
         )
         schema = vol.Schema(
