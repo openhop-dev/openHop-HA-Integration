@@ -2,7 +2,7 @@
   <img src="custom_components/pymc_repeater/brand/icon.png" alt="openHop Repeater" width="150">
 </p>
 
-<h1 align="center">openHop Repeater for Home Assistant</h1>
+<h1 align="center">openHop Repeater Integration for Home Assistant</h1>
 
 <p align="center">
   Monitor and control an <a href="https://github.com/openhop-dev/openhop_repeater">openHop Repeater</a> from Home Assistant.
