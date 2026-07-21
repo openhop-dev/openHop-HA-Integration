@@ -146,7 +146,7 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn("actions/setup-python@v7", workflow)
 
     def test_example_dashboard_is_anonymized_and_includes_v1_1_6_entities(self) -> None:
-        dashboard = (ROOT / "dashboards/pymc_repeater_dashboard.yaml").read_text(
+        dashboard = (ROOT / "dashboards/openhop_repeater_dashboard.yaml").read_text(
             encoding="utf-8"
         )
 

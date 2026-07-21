@@ -110,7 +110,7 @@ Changing an option reloads the integration automatically.
 
 A comprehensive native Lovelace view is included at:
 
-[`dashboards/pymc_repeater_dashboard.yaml`](dashboards/pymc_repeater_dashboard.yaml)
+[`dashboards/openhop_repeater_dashboard.yaml`](dashboards/openhop_repeater_dashboard.yaml)
 
 The template covers radio health, packet flow, LBT diagnostics, routing, neighbor links, controls, advert tuning, MQTT, companions, GPS, external modem readings, updates, and database metrics.
 
