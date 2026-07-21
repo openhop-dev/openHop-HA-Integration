@@ -9,7 +9,7 @@
 - exposed the Repeater metrics storage source and RRD availability diagnostics introduced by the SQLite metrics fallback
 - added contract tests for the new Repeater dev API coverage and run them in the Python smoke workflow
 - renamed the example dashboard to `openhop_repeater_dashboard.yaml` and replaced it with an anonymized, single-placeholder view covering current telemetry, controls, external modem data, neighbor links, and metrics diagnostics
-- reworked the README with relevant HACS, release, download, openHop Discord, validation, and test badges; streamlined installation and setup guidance; documented options, actions, dashboard use, persistent token storage, and community links
+- reworked the README with relevant HACS, release, openHop Discord, validation, and test badges; streamlined installation and setup guidance; documented options, actions, dashboard use, persistent token storage, and community links
 - updated the Python smoke workflow to `actions/setup-python@v7`
 
 ## 1.1.5

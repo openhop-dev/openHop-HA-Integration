@@ -11,7 +11,6 @@
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5?style=for-the-badge&logo=homeassistantcommunitystore&logoColor=white" alt="HACS Custom"></a>
   <a href="https://github.com/openhop-dev/openHop-HA-Integration/releases"><img src="https://img.shields.io/github/v/release/openhop-dev/openHop-HA-Integration?style=for-the-badge" alt="Latest release"></a>
-  <a href="https://github.com/openhop-dev/openHop-HA-Integration/releases"><img src="https://img.shields.io/github/downloads/openhop-dev/openHop-HA-Integration/total?style=for-the-badge" alt="Release downloads"></a>
   <a href="https://discord.gg/3s8MMaSTzq"><img src="https://img.shields.io/discord/1489331292309946508?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="openHop Discord"></a>
 </p>
 
