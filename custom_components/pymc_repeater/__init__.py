@@ -32,6 +32,7 @@ SERVICE_ROOM_POST_MESSAGE = "room_post_message"
 SERVICE_ROOM_MESSAGES_CLEAR = "room_messages_clear"
 SERVICE_CAD_CALIBRATION_START = "cad_calibration_start"
 SERVICE_CAD_CALIBRATION_STOP = "cad_calibration_stop"
+SERVICE_CAD_MANUAL_CHECK = "cad_manual_check"
 SERVICE_SAVE_CAD_SETTINGS = "save_cad_settings"
 SERVICE_DB_PURGE = "db_purge"
 SERVICE_UPDATE_RADIO_CONFIG = "update_radio_config"
@@ -50,6 +51,8 @@ SERVICE_GET_BROKER_PRESETS = "get_broker_presets"
 SERVICE_GET_RECENT_PACKETS = "get_recent_packets"
 SERVICE_GET_FILTERED_PACKETS = "get_filtered_packets"
 SERVICE_GET_PACKET_BY_HASH = "get_packet_by_hash"
+SERVICE_GET_NEIGHBOR_LINKS = "get_neighbor_links"
+SERVICE_GET_NEIGHBOR_LINK_HISTORY = "get_neighbor_link_history"
 SERVICE_GET_ADVERTS_BY_CONTACT_TYPE = "get_adverts_by_contact_type"
 SERVICE_GET_ADVERTS_COUNT_BY_CONTACT_TYPE = "get_adverts_count_by_contact_type"
 SERVICE_GET_ACL_CLIENTS = "get_acl_clients"
@@ -246,14 +249,28 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             lambda api, _: api.async_cad_calibration_start(
                 samples=call.data.get("samples", 8),
                 delay=call.data.get("delay", 100),
+                known_signal_present=call.data.get("known_signal_present", False),
+                cad_symbol_num=call.data.get("cad_symbol_num", 2),
+                cad_timeout_ms=call.data.get("cad_timeout_ms", 500),
             ),
             refresh=False,
         ),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
-                vol.Optional("samples", default=8): vol.Coerce(int),
-                vol.Optional("delay", default=100): vol.Coerce(int),
+                vol.Optional("samples", default=8): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=64)
+                ),
+                vol.Optional("delay", default=100): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=2000)
+                ),
+                vol.Optional("known_signal_present", default=False): bool,
+                vol.Optional("cad_symbol_num", default=2): vol.All(
+                    vol.Coerce(int), vol.In([1, 2, 4, 8, 16])
+                ),
+                vol.Optional("cad_timeout_ms", default=500): vol.All(
+                    vol.Coerce(int), vol.Range(min=50, max=5000)
+                ),
             }
         ),
     )
@@ -269,12 +286,52 @@ async def _async_register_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN,
+        SERVICE_CAD_MANUAL_CHECK,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_cad_manual_check(
+                samples=call.data.get("samples", 1),
+                det_peak=call.data.get("det_peak"),
+                det_min=call.data.get("det_min"),
+                cad_symbol_num=call.data.get("cad_symbol_num"),
+                cad_timeout_ms=call.data.get("cad_timeout_ms", 500),
+                apply_live=call.data.get("apply_live", False),
+            ),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("samples", default=1): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=32)
+                ),
+                vol.Optional("det_peak"): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=255)
+                ),
+                vol.Optional("det_min"): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=255)
+                ),
+                vol.Optional("cad_symbol_num"): vol.All(
+                    vol.Coerce(int), vol.In([1, 2, 4, 8, 16])
+                ),
+                vol.Optional("cad_timeout_ms", default=500): vol.All(
+                    vol.Coerce(int), vol.Range(min=50, max=5000)
+                ),
+                vol.Optional("apply_live", default=False): bool,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_SAVE_CAD_SETTINGS,
         lambda call: _with_api(
             call,
             lambda api, _: api.async_save_cad_settings(
                 peak=call.data["peak"],
                 min_val=call.data["min_val"],
+                cad_symbol_num=call.data.get("cad_symbol_num", 2),
                 detection_rate=call.data.get("detection_rate", 0),
             ),
         ),
@@ -283,6 +340,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("peak"): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
                 vol.Required("min_val"): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+                vol.Optional("cad_symbol_num", default=2): vol.All(
+                    vol.Coerce(int), vol.In([1, 2, 4, 8, 16])
+                ),
                 vol.Optional("detection_rate", default=0): vol.All(
                     vol.Coerce(int), vol.Range(min=0, max=255)
                 ),
@@ -626,6 +686,62 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("packet_hash"): str,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_NEIGHBOR_LINKS,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_neighbor_links(
+                active_within_seconds=call.data.get("active_within_seconds", 90),
+                limit=call.data.get("limit", 500),
+            ),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("active_within_seconds", default=90): vol.All(
+                    vol.Coerce(int), vol.Range(min=1)
+                ),
+                vol.Optional("limit", default=500): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=5000)
+                ),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_NEIGHBOR_LINK_HISTORY,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_neighbor_link_history(
+                peer_hash=call.data["peer_hash"],
+                path_hash_size=call.data["path_hash_size"],
+                hours=call.data.get("hours", 24),
+                limit=call.data.get("limit", 1000),
+            ),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Required("peer_hash"): str,
+                vol.Required("path_hash_size"): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=3)
+                ),
+                vol.Optional("hours", default=24): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=168)
+                ),
+                vol.Optional("limit", default=1000): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=5000)
+                ),
             }
         ),
         supports_response=SupportsResponse.ONLY,

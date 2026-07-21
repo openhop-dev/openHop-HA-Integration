@@ -33,10 +33,11 @@
     "step": {
       "init": {
         "title": "openHop Repeater options",
-        "description": "Adjust how selected openHop Repeater values are shown in Home Assistant.",
+        "description": "Adjust display units and how often the integration refreshes data from the Repeater API.",
         "data": {
           "data_size_unit": "Data size display unit",
-          "uptime_unit": "System uptime display unit"
+          "uptime_unit": "System uptime display unit",
+          "scan_interval": "Integration refresh interval (seconds)"
         }
       }
     }

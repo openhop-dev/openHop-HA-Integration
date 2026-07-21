@@ -84,6 +84,27 @@ cad_calibration_start:
       selector:
         number:
           min: 0
+          max: 2000
+          mode: box
+    known_signal_present:
+      default: false
+      selector:
+        boolean:
+    cad_symbol_num:
+      default: 2
+      selector:
+        select:
+          options:
+            - "1"
+            - "2"
+            - "4"
+            - "8"
+            - "16"
+    cad_timeout_ms:
+      default: 500
+      selector:
+        number:
+          min: 50
           max: 5000
           mode: box
 
@@ -95,6 +116,54 @@ cad_calibration_stop:
       selector:
         config_entry:
           integration: pymc_repeater
+
+cad_manual_check:
+  name: Run manual CAD check
+  description: Run immediate CAD checks and return detection diagnostics.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    samples:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 32
+          mode: box
+    det_peak:
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    det_min:
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    cad_symbol_num:
+      selector:
+        select:
+          options:
+            - "1"
+            - "2"
+            - "4"
+            - "8"
+            - "16"
+    cad_timeout_ms:
+      default: 500
+      selector:
+        number:
+          min: 50
+          max: 5000
+          mode: box
+    apply_live:
+      default: false
+      selector:
+        boolean:
 
 save_cad_settings:
   name: Save CAD settings
@@ -118,6 +187,16 @@ save_cad_settings:
           min: 0
           max: 255
           mode: box
+    cad_symbol_num:
+      default: 2
+      selector:
+        select:
+          options:
+            - "1"
+            - "2"
+            - "4"
+            - "8"
+            - "16"
     detection_rate:
       default: 0
       selector:
@@ -452,6 +531,63 @@ get_packet_by_hash:
       required: true
       selector:
         text:
+
+get_neighbor_links:
+  name: Get neighbor links
+  description: Return current observed upstream neighbor-link snapshots.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    active_within_seconds:
+      default: 90
+      selector:
+        number:
+          min: 1
+          max: 86400
+          mode: box
+    limit:
+      default: 500
+      selector:
+        number:
+          min: 1
+          max: 5000
+          mode: box
+
+get_neighbor_link_history:
+  name: Get neighbor link history
+  description: Return stored packet observations for one upstream neighbor hash.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    peer_hash:
+      required: true
+      selector:
+        text:
+    path_hash_size:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          mode: box
+    hours:
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 168
+          mode: box
+    limit:
+      default: 1000
+      selector:
+        number:
+          min: 1
+          max: 5000
+          mode: box
 
 get_adverts_by_contact_type:
   name: Get adverts by contact type

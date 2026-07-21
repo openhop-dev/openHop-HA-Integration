@@ -137,6 +137,19 @@ def _packet_type_count(data: dict[str, Any]) -> int:
     return len(_packet_type_totals(data))
 
 
+def _neighbor_links(data: dict[str, Any]) -> list[dict[str, Any]]:
+    links = _nested(data, "neighbor_links", "links") or []
+    return links if isinstance(links, list) else []
+
+
+def _active_neighbor_link_count(data: dict[str, Any]) -> int:
+    return sum(
+        1
+        for link in _neighbor_links(data)
+        if isinstance(link, dict) and link.get("active")
+    )
+
+
 def _room_items(data: dict[str, Any]) -> list[dict[str, Any]]:
     payload = data.get("room_stats") or {}
     rooms = payload.get("rooms") if isinstance(payload, dict) else None
@@ -841,6 +854,39 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfInformation.BYTES,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _nested(data, "db_stats", "rrd_size_bytes"),
+    ),
+    PyMCSensorDescription(
+        key="metrics_data_source",
+        name="Metrics data source",
+        icon="mdi:database-sync-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _nested(data, "db_stats", "metrics_data_source"),
+        attrs_fn=lambda data: {
+            "rrd_enabled": _nested(data, "db_stats", "rrd_enabled"),
+            "rrd_available": _nested(data, "db_stats", "rrd_available"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="neighbor_link_count",
+        name="Observed neighbor links",
+        icon="mdi:access-point-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "neighbor_links", "count"),
+        attrs_fn=lambda data: {
+            "active_within_seconds": _nested(
+                data, "neighbor_links", "active_within_seconds"
+            ),
+            "limit": _nested(data, "neighbor_links", "limit"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="active_neighbor_link_count",
+        name="Active neighbor links",
+        icon="mdi:access-point-network-off",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_active_neighbor_link_count,
     ),
     PyMCSensorDescription(
         key="transport_key_count",

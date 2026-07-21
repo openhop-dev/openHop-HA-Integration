@@ -148,6 +148,7 @@ class PyMCRepeaterApiClient:
             "packet_type_stats": self.async_get_packet_type_stats(),
             "lbt_diagnostics": self.async_get_lbt_diagnostics(),
             "default_region": self.async_get_default_region(),
+            "neighbor_links": self.async_get_neighbor_links(),
         }
 
         results = await asyncio.gather(*endpoints.values(), return_exceptions=True)
@@ -217,6 +218,39 @@ class PyMCRepeaterApiClient:
             "GET",
             "/api/route_stats",
             params={"hours": DEFAULT_PACKET_WINDOW_HOURS},
+        )
+
+    async def async_get_neighbor_links(
+        self, *, active_within_seconds: int = 90, limit: int = 500
+    ) -> dict[str, Any]:
+        """Return observed upstream neighbor link snapshots."""
+        return await self._async_request_wrapped(
+            "GET",
+            "/api/neighbor_links",
+            params={
+                "active_within_seconds": active_within_seconds,
+                "limit": limit,
+            },
+        )
+
+    async def async_get_neighbor_link_history(
+        self,
+        *,
+        peer_hash: str,
+        path_hash_size: int,
+        hours: int = DEFAULT_PACKET_WINDOW_HOURS,
+        limit: int = 1000,
+    ) -> dict[str, Any]:
+        """Return stored observations for one upstream neighbor link."""
+        return await self._async_request_wrapped(
+            "GET",
+            "/api/neighbor_link_history",
+            params={
+                "peer_hash": peer_hash,
+                "path_hash_size": path_hash_size,
+                "hours": hours,
+                "limit": limit,
+            },
         )
 
     async def async_get_noise_floor_stats(self) -> dict[str, Any]:
@@ -609,12 +643,25 @@ class PyMCRepeaterApiClient:
             "DELETE", "/api/room_messages_clear", params=params
         )
 
-    async def async_cad_calibration_start(self, samples: int = 8, delay: int = 100) -> Any:
+    async def async_cad_calibration_start(
+        self,
+        samples: int = 8,
+        delay: int = 100,
+        known_signal_present: bool = False,
+        cad_symbol_num: int = 2,
+        cad_timeout_ms: int = 500,
+    ) -> Any:
         """Start CAD calibration."""
         return await self._async_request_wrapped(
             "POST",
             "/api/cad_calibration_start",
-            json_body={"samples": samples, "delay": delay},
+            json_body={
+                "samples": samples,
+                "delay": delay,
+                "known_signal_present": known_signal_present,
+                "cad_symbol_num": cad_symbol_num,
+                "cad_timeout_ms": cad_timeout_ms,
+            },
         )
 
     async def async_cad_calibration_stop(self) -> Any:
@@ -623,8 +670,39 @@ class PyMCRepeaterApiClient:
             "POST", "/api/cad_calibration_stop", json_body={}
         )
 
+    async def async_cad_manual_check(
+        self,
+        *,
+        samples: int = 1,
+        det_peak: int | None = None,
+        det_min: int | None = None,
+        cad_symbol_num: int | None = None,
+        cad_timeout_ms: int = 500,
+        apply_live: bool = False,
+    ) -> dict[str, Any]:
+        """Run one or more immediate CAD checks."""
+        payload: dict[str, Any] = {
+            "samples": samples,
+            "cad_timeout_ms": cad_timeout_ms,
+            "apply_live": apply_live,
+        }
+        if det_peak is not None:
+            payload["det_peak"] = det_peak
+        if det_min is not None:
+            payload["det_min"] = det_min
+        if cad_symbol_num is not None:
+            payload["cad_symbol_num"] = cad_symbol_num
+        return await self._async_request_wrapped(
+            "POST", "/api/cad_manual_check", json_body=payload
+        )
+
     async def async_save_cad_settings(
-        self, *, peak: int, min_val: int, detection_rate: int = 0
+        self,
+        *,
+        peak: int,
+        min_val: int,
+        cad_symbol_num: int = 2,
+        detection_rate: int = 0,
     ) -> Any:
         """Save CAD settings."""
         return await self._async_request_wrapped(
@@ -633,6 +711,7 @@ class PyMCRepeaterApiClient:
             json_body={
                 "peak": peak,
                 "min_val": min_val,
+                "cad_symbol_num": cad_symbol_num,
                 "detection_rate": detection_rate,
             },
         )
