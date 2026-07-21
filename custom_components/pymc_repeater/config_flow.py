@@ -26,14 +26,18 @@ from .api import (
 from .const import (
     CONF_API_TOKEN,
     CONF_DATA_SIZE_UNIT,
+    CONF_SCAN_INTERVAL,
     CONF_TOKEN_ID,
     CONF_TOKEN_NAME,
     CONF_UPTIME_UNIT,
     DATA_SIZE_UNITS,
     DEFAULT_DATA_SIZE_UNIT,
     DEFAULT_PORT,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
     DEFAULT_UPTIME_UNIT,
     DOMAIN,
+    MAX_SCAN_INTERVAL_SECONDS,
+    MIN_SCAN_INTERVAL_SECONDS,
     UPTIME_UNITS,
 )
 
@@ -204,12 +208,25 @@ class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
         current_data_size_unit = self._config_entry.options.get(
             CONF_DATA_SIZE_UNIT, DEFAULT_DATA_SIZE_UNIT
         )
+        current_scan_interval = self._config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS
+        )
         schema = vol.Schema(
             {
                 vol.Required(CONF_DATA_SIZE_UNIT, default=current_data_size_unit): vol.In(
                     DATA_SIZE_UNITS
                 ),
                 vol.Required(CONF_UPTIME_UNIT, default=current_unit): vol.In(UPTIME_UNITS),
+                vol.Required(
+                    CONF_SCAN_INTERVAL,
+                    default=current_scan_interval,
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(
+                        min=MIN_SCAN_INTERVAL_SECONDS,
+                        max=MAX_SCAN_INTERVAL_SECONDS,
+                    ),
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

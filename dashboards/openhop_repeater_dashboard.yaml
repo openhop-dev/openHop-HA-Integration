@@ -1,0 +1,650 @@
+# openHop Repeater dashboard view template
+#
+# QUICK SETUP
+# 1. In Home Assistant, find one entity for your Repeater, such as:
+#      sensor.my_repeater_repeater_version
+# 2. The part before `_repeater_version` is your entity prefix (`my_repeater`).
+# 3. Find and replace every `REPEATER_SLUG` below with that prefix.
+# 4. Optionally change the title and path below.
+#
+# Dynamic MQTT broker, companion, and external-sensor entities vary by install.
+# Replace the clearly marked example broker/companion rows with entities that
+# exist in your instance. If your external sensor is not named `modem`, replace
+# `_sensor_modem_` in those rows with the actual sensor slug shown by HA.
+#
+# This template uses only built-in Home Assistant cards.
+
+title: Example openHop Repeater
+path: example-openhop-repeater
+icon: mdi:radio-tower
+type: masonry
+badges:
+  - entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
+    name: MQTT
+  - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
+    name: MQTT Handler
+  - entity: binary_sensor.REPEATER_SLUG_gps_fix_valid
+    name: GPS Fix
+  - entity: binary_sensor.REPEATER_SLUG_update_available
+    name: Update
+  - entity: sensor.REPEATER_SLUG_repeater_version
+    name: Version
+  - entity: select.REPEATER_SLUG_repeater_mode
+    name: Mode
+cards:
+  - type: grid
+    title: Repeater Overview
+    columns: 3
+    square: false
+    cards:
+      - type: entity
+        entity: sensor.REPEATER_SLUG_current_airtime
+        name: Current Airtime
+        icon: mdi:radio-tower
+      - type: entity
+        entity: sensor.REPEATER_SLUG_radio_utilization
+        name: Radio Utilization
+        icon: mdi:access-point-network
+      - type: entity
+        entity: sensor.REPEATER_SLUG_current_noise_floor
+        name: Noise Floor
+        icon: mdi:waves
+      - type: entity
+        entity: sensor.REPEATER_SLUG_packets_24h
+        name: Packets 24h
+        icon: mdi:package-variant
+      - type: entity
+        entity: sensor.REPEATER_SLUG_packet_drop_rate_24h
+        name: Drop Rate 24h
+        icon: mdi:packet-filter
+      - type: entity
+        entity: sensor.REPEATER_SLUG_average_score_24h
+        name: Avg Score 24h
+        icon: mdi:signal
+
+  - type: horizontal-stack
+    cards:
+      - type: gauge
+        entity: sensor.REPEATER_SLUG_current_airtime
+        name: Airtime
+        min: 0
+        max: 100
+        severity:
+          green: 0
+          yellow: 50
+          red: 80
+      - type: gauge
+        entity: sensor.REPEATER_SLUG_radio_utilization
+        name: Radio Use
+        min: 0
+        max: 100
+        severity:
+          green: 0
+          yellow: 60
+          red: 85
+      - type: gauge
+        entity: sensor.REPEATER_SLUG_packet_drop_rate_24h
+        name: Drops
+        min: 0
+        max: 100
+        severity:
+          green: 0
+          yellow: 5
+          red: 15
+
+  - type: history-graph
+    title: Radio Health
+    hours_to_show: 24
+    refresh_interval: 60
+    entities:
+      - entity: sensor.REPEATER_SLUG_current_airtime
+        name: Airtime
+      - entity: sensor.REPEATER_SLUG_radio_utilization
+        name: Utilization
+      - entity: sensor.REPEATER_SLUG_current_noise_floor
+        name: Noise Floor
+      - entity: sensor.REPEATER_SLUG_average_rssi_24h
+        name: Avg RSSI
+      - entity: sensor.REPEATER_SLUG_average_snr_24h
+        name: Avg SNR
+
+  - type: entities
+    title: System Health
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_sensor_system_health_ok
+        name: System Health OK
+        icon: mdi:heart-pulse
+      - entity: sensor.REPEATER_SLUG_cpu_usage
+        name: CPU Usage
+        icon: mdi:cpu-64-bit
+      - entity: sensor.REPEATER_SLUG_memory_usage
+        name: Memory Usage
+        icon: mdi:memory
+      - entity: sensor.REPEATER_SLUG_memory_used
+        name: Memory Used
+        icon: mdi:memory
+      - entity: sensor.REPEATER_SLUG_disk_usage
+        name: Disk Usage
+        icon: mdi:harddisk
+      - entity: sensor.REPEATER_SLUG_system_uptime
+        name: System Uptime
+        icon: mdi:clock-outline
+      - entity: sensor.REPEATER_SLUG_total_processes
+        name: Total Processes
+        icon: mdi:application-cog-outline
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_external_sensors_loaded
+        name: External Sensors Loaded
+        icon: mdi:devices
+      - entity: sensor.REPEATER_SLUG_external_sensor_readings_ok
+        name: External Sensor Readings OK
+        icon: mdi:check-network-outline
+
+  - type: entities
+    title: Network Traffic
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_network_bytes_received
+        name: Bytes Received
+        icon: mdi:download-network-outline
+      - entity: sensor.REPEATER_SLUG_network_bytes_sent
+        name: Bytes Sent
+        icon: mdi:upload-network-outline
+      - entity: sensor.REPEATER_SLUG_network_packets_received
+        name: Network Packets Received
+        icon: mdi:download-network
+      - entity: sensor.REPEATER_SLUG_network_packets_sent
+        name: Network Packets Sent
+        icon: mdi:upload-network
+
+  - type: entities
+    title: Packet Flow
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_packets_24h
+        name: Packets Received 24h
+        icon: mdi:download-network
+      - entity: sensor.REPEATER_SLUG_transmitted_packets_24h
+        name: Transmitted Packets 24h
+        icon: mdi:upload-network
+      - entity: sensor.REPEATER_SLUG_dropped_packets_24h
+        name: Dropped Packets 24h
+        icon: mdi:close-network
+      - entity: sensor.REPEATER_SLUG_crc_errors_24h
+        name: CRC Errors 24h
+        icon: mdi:alert-circle-outline
+      - entity: sensor.REPEATER_SLUG_packets_received_per_hour
+        name: Packets Received / Hour
+        icon: mdi:chart-line
+      - entity: sensor.REPEATER_SLUG_packets_forwarded_per_hour
+        name: Packets Forwarded / Hour
+        icon: mdi:call-split
+      - entity: sensor.REPEATER_SLUG_packet_types_24h
+        name: Packet Types 24h
+        icon: mdi:format-list-bulleted-type
+
+  - type: history-graph
+    title: Packet Trends
+    hours_to_show: 24
+    refresh_interval: 60
+    entities:
+      - entity: sensor.REPEATER_SLUG_packets_received_per_hour
+        name: RX / Hour
+      - entity: sensor.REPEATER_SLUG_packets_forwarded_per_hour
+        name: Forwarded / Hour
+      - entity: sensor.REPEATER_SLUG_dropped_packets_24h
+        name: Dropped 24h
+      - entity: sensor.REPEATER_SLUG_crc_errors_24h
+        name: CRC 24h
+
+  - type: entities
+    title: Listen Before Talk Diagnostics
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_lbt_data_available
+        name: LBT Data Available
+        icon: mdi:database-check-outline
+      - entity: sensor.REPEATER_SLUG_lbt_transmissions_24h
+        name: LBT Transmissions 24h
+        icon: mdi:transmission-tower-export
+      - entity: sensor.REPEATER_SLUG_lbt_retry_rate_24h
+        name: LBT Retry Rate 24h
+        icon: mdi:reload-alert
+      - entity: sensor.REPEATER_SLUG_lbt_average_attempts_24h
+        name: Average Attempts 24h
+        icon: mdi:counter
+      - entity: sensor.REPEATER_SLUG_lbt_severe_contention_24h
+        name: Severe Contention 24h
+        icon: mdi:alert-octagon-outline
+
+  - type: entities
+    title: Signal Quality
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_average_rssi_24h
+        name: Average RSSI 24h
+        icon: mdi:signal
+      - entity: sensor.REPEATER_SLUG_average_snr_24h
+        name: Average SNR 24h
+        icon: mdi:signal-cellular-outline
+      - entity: sensor.REPEATER_SLUG_average_noise_floor_24h
+        name: Average Noise Floor 24h
+        icon: mdi:waves
+      - entity: sensor.REPEATER_SLUG_average_score_24h
+        name: Average Score 24h
+        icon: mdi:star-circle
+      - entity: sensor.REPEATER_SLUG_average_payload_length_24h
+        name: Average Payload Length 24h
+        icon: mdi:code-brackets
+      - entity: sensor.REPEATER_SLUG_average_tx_delay_24h
+        name: Average TX Delay 24h
+        icon: mdi:timer-outline
+
+  - type: entities
+    title: Routing
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_route_direct
+        name: Direct Routes
+        icon: mdi:routes
+      - entity: sensor.REPEATER_SLUG_route_flood
+        name: Flood Routes
+        icon: mdi:waves-arrow-right
+      - entity: switch.REPEATER_SLUG_allow_unscoped_flood
+        name: Allow Unscoped Flood
+        icon: mdi:flood
+
+  - type: entities
+    title: Neighbor Links
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_observed_neighbor_links
+        name: Observed Neighbor Links
+        icon: mdi:access-point-network
+      - entity: sensor.REPEATER_SLUG_active_neighbor_links
+        name: Active Neighbor Links
+        icon: mdi:access-point-network-off
+
+  - type: entities
+    title: Repeater Controls
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: select.REPEATER_SLUG_repeater_mode
+        name: Repeater Mode
+        icon: mdi:tune
+      - entity: sensor.REPEATER_SLUG_default_region
+        name: Current Default Region
+        icon: mdi:earth
+      - entity: select.REPEATER_SLUG_default_region
+        name: Set Default Region
+        icon: mdi:earth-arrow-right
+      - entity: switch.REPEATER_SLUG_duty_cycle_enforcement
+        name: Duty Cycle Enforcement
+        icon: mdi:shield-check
+      - entity: number.REPEATER_SLUG_max_airtime_percent
+        name: Max Airtime %
+        icon: mdi:percent
+      - entity: button.REPEATER_SLUG_send_advert
+        name: Send Advert
+        icon: mdi:bullhorn
+      - entity: button.REPEATER_SLUG_restart_repeater_service
+        name: Restart Repeater Service
+        icon: mdi:restart-alert
+
+  - type: entities
+    title: Advert System
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_advert_tier
+        name: Advert Tier
+        icon: mdi:stairs
+      - entity: sensor.REPEATER_SLUG_adverts_allowed
+        name: Adverts Allowed
+        icon: mdi:check-circle-outline
+      - entity: sensor.REPEATER_SLUG_adverts_dropped
+        name: Adverts Dropped
+        icon: mdi:close-circle-outline
+      - entity: sensor.REPEATER_SLUG_advert_drop_rate
+        name: Advert Drop Rate
+        icon: mdi:chart-bell-curve
+      - entity: sensor.REPEATER_SLUG_tracked_advert_hashes
+        name: Tracked Advert Hashes
+        icon: mdi:fingerprint
+      - entity: sensor.REPEATER_SLUG_tracked_advert_pubkeys
+        name: Tracked Advert Pubkeys
+        icon: mdi:key-chain
+
+  - type: entities
+    title: Advert Rate Limiting
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: switch.REPEATER_SLUG_advert_rate_limit
+        name: Rate Limit Enabled
+        icon: mdi:speedometer-slow
+      - entity: binary_sensor.REPEATER_SLUG_advert_adaptive_enabled
+        name: Adaptive Enabled
+        icon: mdi:auto-fix
+      - entity: switch.REPEATER_SLUG_advert_adaptive_control
+        name: Adaptive Control
+        icon: mdi:tune-variant
+      - entity: binary_sensor.REPEATER_SLUG_advert_dedupe_enabled
+        name: Dedupe Enabled
+        icon: mdi:content-duplicate
+      - entity: switch.REPEATER_SLUG_advert_penalty_box
+        name: Penalty Box
+        icon: mdi:account-cancel
+      - entity: number.REPEATER_SLUG_advert_minimum_interval
+        name: Minimum Interval
+      - entity: number.REPEATER_SLUG_advert_quiet_max
+        name: Quiet Max
+      - entity: number.REPEATER_SLUG_advert_normal_max
+        name: Normal Max
+      - entity: number.REPEATER_SLUG_advert_busy_max
+        name: Busy Max
+
+  - type: entities
+    title: Advert Penalty Tuning
+    show_header_toggle: false
+    entities:
+      - entity: number.REPEATER_SLUG_advert_base_penalty
+        name: Base Penalty
+      - entity: number.REPEATER_SLUG_advert_penalty_multiplier
+        name: Penalty Multiplier
+      - entity: number.REPEATER_SLUG_advert_max_penalty
+        name: Max Penalty
+      - entity: number.REPEATER_SLUG_advert_violation_threshold
+        name: Violation Threshold
+      - entity: number.REPEATER_SLUG_advert_violation_decay
+        name: Violation Decay
+      - entity: number.REPEATER_SLUG_advert_bucket_capacity
+        name: Bucket Capacity
+      - entity: number.REPEATER_SLUG_advert_refill_tokens
+        name: Refill Tokens
+      - entity: number.REPEATER_SLUG_advert_refill_interval
+        name: Refill Interval
+      - entity: number.REPEATER_SLUG_advert_ewma_alpha
+        name: EWMA Alpha
+      - entity: number.REPEATER_SLUG_advert_hysteresis
+        name: Hysteresis
+
+  - type: entities
+    title: Clients & Identities
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_authenticated_clients
+        name: Authenticated Clients
+        icon: mdi:account-check
+      - entity: sensor.REPEATER_SLUG_acl_clients
+        name: ACL Clients
+        icon: mdi:account-lock
+      - entity: sensor.REPEATER_SLUG_registered_identities
+        name: Registered Identities
+        icon: mdi:card-account-details
+      - entity: sensor.REPEATER_SLUG_transport_keys
+        name: Transport Keys
+        icon: mdi:key
+      - entity: sensor.REPEATER_SLUG_room_servers
+        name: Room Servers
+        icon: mdi:server-network
+
+  - type: entities
+    title: MQTT Brokers
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_connected_mqtt_brokers
+        name: Connected Brokers
+        icon: mdi:cloud-check
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
+        name: Broker Connected
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
+        name: Handler Active
+      - type: divider
+      # Replace these example rows with broker entities from your installation.
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_1
+        name: Example Broker 1
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_2
+        name: Example Broker 2
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_3
+        name: Example Broker 3
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_4
+        name: Example Broker 4
+
+  - type: entities
+    title: Companions
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_configured_companions
+        name: Configured Companions
+        icon: mdi:account-multiple
+      - entity: sensor.REPEATER_SLUG_running_companion_bridges
+        name: Running Companion Bridges
+        icon: mdi:bridge
+      - type: divider
+      # Replace these example rows with companion entities from your installation.
+      - entity: binary_sensor.REPEATER_SLUG_companion_example
+        name: Example Companion
+      - entity: binary_sensor.REPEATER_SLUG_companion_bridge_example
+        name: Example Bridge
+      - entity: sensor.REPEATER_SLUG_companion_example_channels
+        name: Example Channels
+      - entity: sensor.REPEATER_SLUG_companion_example_contacts
+        name: Example Contacts
+
+  - type: entities
+    title: GPS
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_gps_enabled
+        name: GPS Enabled
+      - entity: binary_sensor.REPEATER_SLUG_gps_running
+        name: GPS Running
+      - entity: binary_sensor.REPEATER_SLUG_gps_fix_valid
+        name: Fix Valid
+      - entity: binary_sensor.REPEATER_SLUG_gps_stale
+        name: GPS Stale
+      - entity: sensor.REPEATER_SLUG_gps_state
+        name: GPS State
+      - entity: sensor.REPEATER_SLUG_gps_quality
+        name: GPS Quality
+      - entity: sensor.REPEATER_SLUG_gps_position_source
+        name: Position Source
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_gps_latitude
+        name: Latitude
+      - entity: sensor.REPEATER_SLUG_gps_longitude
+        name: Longitude
+      - entity: sensor.REPEATER_SLUG_gps_altitude
+        name: Altitude
+      - entity: sensor.REPEATER_SLUG_gps_speed
+        name: Speed
+      - entity: sensor.REPEATER_SLUG_gps_course
+        name: Course
+      - entity: sensor.REPEATER_SLUG_gps_geoid_separation
+        name: Geoid Separation
+      - entity: sensor.REPEATER_SLUG_gps_magnetic_variation
+        name: Magnetic Variation
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_gps_satellites_used
+        name: Satellites Used
+      - entity: sensor.REPEATER_SLUG_gps_satellites_in_view
+        name: Satellites In View
+      - entity: sensor.REPEATER_SLUG_gps_hdop
+        name: HDOP
+      - entity: sensor.REPEATER_SLUG_gps_pdop
+        name: PDOP
+      - entity: sensor.REPEATER_SLUG_gps_vdop
+        name: VDOP
+
+  - type: entities
+    title: GPS Sync & Updates
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_gps_time_sync_enabled
+        name: Time Sync Enabled
+      - entity: sensor.REPEATER_SLUG_gps_time_sync_state
+        name: Time Sync State
+      - entity: sensor.REPEATER_SLUG_gps_utc_time
+        name: UTC Time
+      - entity: binary_sensor.REPEATER_SLUG_gps_location_updates_enabled
+        name: Location Updates Enabled
+      - entity: sensor.REPEATER_SLUG_gps_location_update_state
+        name: Location Update State
+      - entity: sensor.REPEATER_SLUG_gps_last_sentence_type
+        name: Last Sentence Type
+      - entity: sensor.REPEATER_SLUG_gps_valid_checksums
+        name: Valid Checksums
+
+  - type: entities
+    title: External Modem Status
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_sensor_modem_ok
+        name: Modem OK
+        icon: mdi:check-circle-outline
+      - entity: sensor.REPEATER_SLUG_sensor_modem_source
+        name: Source
+        icon: mdi:source-branch
+      - entity: sensor.REPEATER_SLUG_sensor_modem_url
+        name: Modem URL
+        icon: mdi:web
+      - entity: sensor.REPEATER_SLUG_sensor_modem_datetime_utc
+        name: Modem UTC Time
+        icon: mdi:clock-outline
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_percent
+        name: Battery
+        icon: mdi:battery
+      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_v
+        name: Battery Voltage
+        icon: mdi:flash
+      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_mv
+        name: Battery Voltage mV
+        icon: mdi:flash-outline
+      - entity: sensor.REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour
+        name: Solar Charge Rate
+        icon: mdi:solar-power
+
+  - type: entities
+    title: External Modem GPS
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_sensor_modem_gps_enabled
+        name: GPS Enabled
+        icon: mdi:crosshairs-gps
+      - entity: binary_sensor.REPEATER_SLUG_sensor_modem_gps_seen
+        name: GPS Seen
+        icon: mdi:satellite-variant
+      - entity: binary_sensor.REPEATER_SLUG_sensor_modem_fix_valid
+        name: Fix Valid
+        icon: mdi:map-marker-check
+      - entity: sensor.REPEATER_SLUG_sensor_modem_fix_quality
+        name: Fix Quality
+        icon: mdi:signal
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_sensor_modem_latitude
+        name: Latitude
+      - entity: sensor.REPEATER_SLUG_sensor_modem_longitude
+        name: Longitude
+      - entity: sensor.REPEATER_SLUG_sensor_modem_altitude_m
+        name: Altitude
+      - entity: sensor.REPEATER_SLUG_sensor_modem_speed_kmh
+        name: Speed
+      - entity: sensor.REPEATER_SLUG_sensor_modem_course_degrees
+        name: Course
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_sensor_modem_satellites_used
+        name: Satellites Used
+      - entity: sensor.REPEATER_SLUG_sensor_modem_satellites_in_view
+        name: Satellites In View
+
+  - type: entities
+    title: Update Management
+    state_color: true
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.REPEATER_SLUG_update_available
+        name: Update Available
+        icon: mdi:update
+      - entity: sensor.REPEATER_SLUG_repeater_version
+        name: Installed Version
+        icon: mdi:tag
+      - entity: sensor.REPEATER_SLUG_update_latest_version
+        name: Latest Version
+        icon: mdi:tag-plus
+      - entity: sensor.REPEATER_SLUG_update_state
+        name: Update State
+        icon: mdi:progress-download
+      - entity: sensor.REPEATER_SLUG_update_channel
+        name: Current Update Channel
+        icon: mdi:source-branch
+      - entity: select.REPEATER_SLUG_update_channel
+        name: Set Update Channel
+        icon: mdi:source-branch
+      - entity: button.REPEATER_SLUG_check_for_updates
+        name: Check For Updates
+        icon: mdi:cloud-search
+      - entity: button.REPEATER_SLUG_install_latest_update
+        name: Install Latest Update
+        icon: mdi:download-circle
+
+  - type: entities
+    title: Metrics Database
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_database_size
+        name: Database Size
+        icon: mdi:database
+      - entity: sensor.REPEATER_SLUG_metrics_history_size
+        name: Metrics History Size
+        icon: mdi:chart-timeline
+      - entity: sensor.REPEATER_SLUG_metrics_data_source
+        name: Metrics Data Source
+        icon: mdi:database-sync-outline
+      - entity: sensor.REPEATER_SLUG_db_rows_packets
+        name: Packet Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_api_tokens
+        name: API Token Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_migrations
+        name: Migration Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_adverts
+        name: Advert Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_crc_errors
+        name: CRC Error Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_noise_floor
+        name: Noise Floor Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_transport_keys
+        name: Transport Key Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_room_messages
+        name: Room Message Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_room_client_sync
+        name: Room Client Sync Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_companion_messages
+        name: Companion Message Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_companion_channels
+        name: Companion Channel Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_companion_contacts
+        name: Companion Contact Rows
+      - entity: sensor.REPEATER_SLUG_db_rows_companion_prefs
+        name: Companion Pref Rows
+      - entity: button.REPEATER_SLUG_vacuum_metrics_database
+        name: Vacuum Metrics Database
+        icon: mdi:database-refresh
+
+show_icon_and_title: true
