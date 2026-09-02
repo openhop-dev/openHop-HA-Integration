@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- aligned advert controls with current Repeater dev support for explicit flood/direct sends and independent flood/direct schedules
+- added MQTT neighbors publication status, a manual publication control, stored neighbor-scope retrieval, and one-neighbor scope queries
+- allowed the neighbor-scope query action to wait through the Repeater's 45-second response window instead of hitting the integration's normal 10-second API timeout
+- documented multi-radio `radio_id`, MQTT custom base topics, and neighbor-publisher payload support on the existing raw configuration actions
+- exposed current Repeater dev sensor-manager payloads generically, including BME280 pressure and normalized openHop Modem voltage/current/power readings with Home Assistant units, numeric-string coercion, and an additive battery-percentage alias, without changing compatibility identifiers
+- added English translation keys for the new advert controls, MQTT-neighbor status, and radio-stack diagnostics
+- added radio-stack mode and configured-radio-count diagnostics for the Repeater's current multi-radio API payload
+- aligned the flood advert interval control with the Repeater's disjoint `0` or `3-168` hour validation instead of allowing invalid one- and two-hour writes
+- stopped retaining raw transport-key and private identity configuration in coordinator polling and redacted runtime location, identity, network, and credential fields from downloadable diagnostics
+
 ## 1.1.6
 
 - changed the integration-wide API refresh interval to a configurable option, defaulting to 15 seconds

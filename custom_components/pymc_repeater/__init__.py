@@ -28,6 +28,10 @@ PLATFORMS: list[Platform] = [
 ]
 
 SERVICE_PING_NEIGHBOR = "ping_neighbor"
+SERVICE_SEND_ADVERT = "send_advert"
+SERVICE_PUBLISH_NEIGHBORS = "publish_neighbors"
+SERVICE_GET_NEIGHBOR_SCOPES = "get_neighbor_scopes"
+SERVICE_QUERY_NEIGHBOR_SCOPES = "query_neighbor_scopes"
 SERVICE_ROOM_POST_MESSAGE = "room_post_message"
 SERVICE_ROOM_MESSAGES_CLEAR = "room_messages_clear"
 SERVICE_CAD_CALIBRATION_START = "cad_calibration_start"
@@ -193,6 +197,62 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 vol.Optional("timeout", default=10): vol.Coerce(int),
             }
         ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEND_ADVERT,
+        lambda call: _with_api(
+            call,
+            lambda api, _: api.async_send_advert(call.data.get("mode", "flood")),
+            refresh=False,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("mode", default="flood"): vol.In(["flood", "direct"]),
+            }
+        ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PUBLISH_NEIGHBORS,
+        lambda call: _with_api(
+            call,
+            lambda api, _: api.async_publish_neighbors(),
+            refresh=True,
+        ),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_NEIGHBOR_SCOPES,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_neighbor_scopes(),
+            always_return=True,
+        ),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_QUERY_NEIGHBOR_SCOPES,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_query_neighbor_scopes(call.data["pubkey"]),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Required("pubkey"): vol.Match(r"(?i)^[0-9a-f]{64}$"),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
     )
 
     hass.services.async_register(

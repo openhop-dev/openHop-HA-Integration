@@ -15,6 +15,30 @@ from yarl import URL
 from .const import CLIENT_ID_PREFIX, DEFAULT_PACKET_WINDOW_HOURS
 
 REQUEST_TIMEOUT = 10
+NEIGHBOR_SCOPE_QUERY_TIMEOUT = 50
+SENSITIVE_RESPONSE_KEYS = {
+    "identity_key",
+    "private_key",
+    "admin_password",
+    "guest_password",
+    "password",
+    "token",
+    "transport_key",
+    "jwt_secret",
+}
+
+
+def _drop_sensitive_fields(value: Any) -> Any:
+    """Recursively remove private configuration fields from API payloads."""
+    if isinstance(value, dict):
+        return {
+            key: _drop_sensitive_fields(item)
+            for key, item in value.items()
+            if key not in SENSITIVE_RESPONSE_KEYS
+        }
+    if isinstance(value, list):
+        return [_drop_sensitive_fields(item) for item in value]
+    return value
 
 
 class PyMCRepeaterError(Exception):
@@ -283,16 +307,30 @@ class PyMCRepeaterApiClient:
         return await self._async_request_wrapped("GET", "/api/acl_info")
 
     async def async_get_identities(self) -> dict[str, Any]:
-        """Return identity stats."""
-        return await self._async_request_wrapped("GET", "/api/identities")
+        """Return identity stats without private configuration fields."""
+        payload = await self._async_request_wrapped("GET", "/api/identities")
+        if not isinstance(payload, dict):
+            raise PyMCRepeaterApiError("Invalid identities response")
+        return _drop_sensitive_fields(payload)
 
     async def async_get_db_stats(self) -> dict[str, Any]:
         """Return database stats."""
         return await self._async_request_wrapped("GET", "/api/db_stats")
 
     async def async_get_transport_keys(self) -> list[dict[str, Any]]:
-        """Return transport keys."""
-        return await self._async_request_wrapped("GET", "/api/transport_keys")
+        """Return transport-key metadata without retaining key material."""
+        items = await self._async_request_wrapped("GET", "/api/transport_keys")
+        if not isinstance(items, list):
+            raise PyMCRepeaterApiError("Invalid transport keys response")
+
+        safe_items: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            safe_item = dict(item)
+            safe_item.pop("transport_key", None)
+            safe_items.append(safe_item)
+        return safe_items
 
     async def async_get_default_region(self) -> dict[str, Any]:
         """Return mesh default region configuration."""
@@ -536,9 +574,42 @@ class PyMCRepeaterApiClient:
             params["room_hash"] = room_hash
         return await self._async_request_wrapped("DELETE", "/api/room_message", params=params)
 
-    async def async_send_advert(self) -> Any:
-        """Trigger a repeater advert send."""
-        return await self._async_request_wrapped("POST", "/api/send_advert", json_body={})
+    async def async_get_neighbor_scopes(self) -> dict[str, Any]:
+        """Return stored neighbor scopes plus this Repeater's served scopes."""
+        payload = await self._async_request_json(
+            "GET", "/api/neighbor_scopes", auth="api_token"
+        )
+        if payload.get("success") is False:
+            raise PyMCRepeaterApiError(
+                payload.get("error", "Failed to fetch neighbor scopes")
+            )
+        scopes = payload.get("data") or {}
+        return {
+            "scopes": scopes,
+            "count": payload.get("count", len(scopes) if isinstance(scopes, dict) else 0),
+            "served": payload.get("served"),
+        }
+
+    async def async_query_neighbor_scopes(self, pubkey: str) -> dict[str, Any]:
+        """Query one zero-hop neighbor for its served region scopes."""
+        return await self._async_request_wrapped(
+            "POST",
+            "/api/query_neighbor_scopes",
+            json_body={"pubkey": pubkey},
+            timeout_seconds=NEIGHBOR_SCOPE_QUERY_TIMEOUT,
+        )
+
+    async def async_publish_neighbors(self) -> Any:
+        """Schedule a neighbor discovery and MQTT publication cycle."""
+        return await self._async_request_wrapped(
+            "POST", "/api/publish_neighbors", json_body={}
+        )
+
+    async def async_send_advert(self, mode: str = "flood") -> Any:
+        """Trigger a flood or direct repeater advert send."""
+        return await self._async_request_wrapped(
+            "POST", "/api/send_advert", json_body={"mode": mode}
+        )
 
     async def async_restart_service(self) -> dict[str, Any]:
         """Restart the repeater service."""
@@ -925,9 +996,15 @@ class PyMCRepeaterApiClient:
         *,
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
+        timeout_seconds: float = REQUEST_TIMEOUT,
     ) -> Any:
         payload = await self._async_request_json(
-            method, path, params=params, json_body=json_body, auth="api_token"
+            method,
+            path,
+            params=params,
+            json_body=json_body,
+            auth="api_token",
+            timeout_seconds=timeout_seconds,
         )
         if payload.get("success") is False:
             raise PyMCRepeaterApiError(payload.get("error", f"Request failed for {path}"))
@@ -977,6 +1054,7 @@ class PyMCRepeaterApiClient:
         json_body: dict[str, Any] | None = None,
         auth: str = "api_token",
         bearer_token: str | None = None,
+        timeout_seconds: float = REQUEST_TIMEOUT,
     ) -> dict[str, Any]:
         headers = {"Accept": "application/json"}
 
@@ -992,7 +1070,7 @@ class PyMCRepeaterApiClient:
         url = f"{self.base_url}{path}"
 
         try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
+            async with asyncio.timeout(timeout_seconds):
                 async with self._session.request(
                     method,
                     url,

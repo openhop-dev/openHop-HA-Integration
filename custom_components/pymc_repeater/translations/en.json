@@ -47,6 +47,15 @@
       "repeater_version": {
         "name": "Repeater version"
       },
+      "radio_stack_mode": {
+        "name": "Radio stack mode"
+      },
+      "configured_radio_count": {
+        "name": "Configured radio count"
+      },
+      "mqtt_neighbors_phase": {
+        "name": "MQTT neighbors phase"
+      },
       "packets_24h": {
         "name": "Packets (24h)"
       },
@@ -97,6 +106,22 @@
       },
       "system_uptime": {
         "name": "System uptime"
+      }
+    },
+    "button": {
+      "send_direct_advert": {
+        "name": "Send direct advert"
+      },
+      "publish_neighbors": {
+        "name": "Publish MQTT neighbors"
+      }
+    },
+    "number": {
+      "flood_advert_interval_hours": {
+        "name": "Flood advert interval"
+      },
+      "direct_advert_interval_hours": {
+        "name": "Direct advert interval"
       }
     },
     "binary_sensor": {

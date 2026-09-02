@@ -33,13 +33,13 @@ The integration uses coordinated local polling instead of making a separate API 
 
 - UI-based setup and options flows
 - Configurable integration-wide polling interval
-- Repeater, radio, packet, routing, and signal-quality telemetry
-- MQTT broker and handler status
+- Repeater, single/multi-radio stack, packet, routing, and signal-quality telemetry
+- MQTT broker, handler, and neighbor-publication status
 - Hardware, process, network, database, and metrics diagnostics
 - GPS position, fix, satellite, time-sync, and location-update data
 - External sensor-manager entities, including supported modem and UPS readings
-- Neighbor-link counts and on-demand neighbor history
-- Default-region, duty-cycle, advert-rate, and Repeater-mode controls
+- Neighbor-link counts, neighbor-scope queries, and on-demand neighbor history
+- Default-region, duty-cycle, advert-rate, advert-schedule, and Repeater-mode controls
 - Update status, update-channel selection, and update actions
 - CAD calibration controls and manual CAD checks
 - Native Home Assistant diagnostics and an extensive example dashboard
@@ -111,7 +111,7 @@ A comprehensive native Lovelace view is included at:
 
 [`dashboards/openhop_repeater_dashboard.yaml`](dashboards/openhop_repeater_dashboard.yaml)
 
-The template covers radio health, packet flow, LBT diagnostics, routing, neighbor links, controls, advert tuning, MQTT, companions, GPS, external modem readings, updates, and database metrics.
+The template covers radio health and stack diagnostics, packet flow, LBT diagnostics, routing, neighbor links, controls, advert tuning, MQTT, companions, GPS, external modem power readings, updates, and database metrics.
 
 To use it:
 
@@ -129,14 +129,17 @@ The dashboard uses only built-in Home Assistant cards.
 
 The integration exposes Home Assistant actions for supported Repeater operations, including:
 
-- Sending adverts and restarting the Repeater service
+- Sending flood or direct adverts and restarting the Repeater service
 - Checking for and installing updates
-- Reading broker presets and neighbor-link history
+- Reading broker presets, neighbor-link history, and stored neighbor scopes
+- Querying one zero-hop neighbor's scopes or scheduling an MQTT neighbors publication cycle
 - Running manual CAD checks and CAD calibration
 - Saving CAD settings
 - Reading advert, companion, and contact diagnostics
 
 Open **Developer tools → Actions** and search for `openHop Repeater` or `pymc_repeater` to see the actions and their current fields.
+
+The raw radio-config action accepts the Repeater dev `radio_id` field for multi-radio targeting and `direct_advert_interval_hours` for the additional advert schedule. The raw MQTT-config action accepts custom `base_topic` values and neighbor-publisher settings supported by current Repeater dev builds.
 
 ## Authentication and persistent storage
 

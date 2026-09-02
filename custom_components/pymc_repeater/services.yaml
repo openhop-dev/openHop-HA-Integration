@@ -18,6 +18,53 @@ ping_neighbor:
           max: 60
           mode: box
 
+send_advert:
+  name: Send advert
+  description: Send a Repeater advert using the flood or direct mode supported by current Repeater dev builds.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    mode:
+      default: flood
+      selector:
+        select:
+          options:
+            - flood
+            - direct
+
+publish_neighbors:
+  name: Publish MQTT neighbors
+  description: Schedule a neighbor discovery, scope-query, and MQTT publication cycle. The Repeater must have neighbor publishing enabled and an opted-in broker.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+
+get_neighbor_scopes:
+  name: Get neighbor scopes
+  description: Return the last stored region-scope result for each queried neighbor and the scopes served by this Repeater.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+
+query_neighbor_scopes:
+  name: Query neighbor scopes
+  description: Query one zero-hop neighbor for its served region scopes. This can take up to 45 seconds and is rate-limited by the remote node.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    pubkey:
+      required: true
+      selector:
+        text:
+
 room_post_message:
   name: Post room message
   description: Post a message to an openHop room server.
@@ -220,7 +267,7 @@ db_purge:
 
 update_radio_config:
   name: Update radio config
-  description: Send a raw radio config payload to the repeater API.
+  description: Send a raw radio config payload to the Repeater API. Current dev builds accept radio_id for multi-radio targeting and direct_advert_interval_hours for the additional advert schedule.
   fields:
     config_entry_id:
       selector:
@@ -233,7 +280,7 @@ update_radio_config:
 
 update_mqtt_config:
   name: Update MQTT config
-  description: Send a raw MQTT config payload to the repeater API.
+  description: Send a raw MQTT config payload to the Repeater API, including custom base_topic values and neighbor-publisher settings supported by current dev builds.
   fields:
     config_entry_id:
       selector:

@@ -134,6 +134,12 @@ cards:
       - entity: sensor.REPEATER_SLUG_total_processes
         name: Total Processes
         icon: mdi:application-cog-outline
+      - entity: sensor.REPEATER_SLUG_radio_stack_mode
+        name: Radio Stack Mode
+        icon: mdi:radio-tower
+      - entity: sensor.REPEATER_SLUG_configured_radio_count
+        name: Configured Radio Count
+        icon: mdi:counter
       - type: divider
       - entity: sensor.REPEATER_SLUG_external_sensors_loaded
         name: External Sensors Loaded
@@ -271,6 +277,12 @@ cards:
       - entity: sensor.REPEATER_SLUG_active_neighbor_links
         name: Active Neighbor Links
         icon: mdi:access-point-network-off
+      - entity: sensor.REPEATER_SLUG_mqtt_neighbors_phase
+        name: MQTT Neighbors Phase
+        icon: mdi:access-point-network
+      - entity: button.REPEATER_SLUG_publish_mqtt_neighbors
+        name: Publish MQTT Neighbors
+        icon: mdi:cloud-upload-outline
 
   - type: entities
     title: Repeater Controls
@@ -293,8 +305,17 @@ cards:
         name: Max Airtime %
         icon: mdi:percent
       - entity: button.REPEATER_SLUG_send_advert
-        name: Send Advert
+        name: Send Flood Advert
         icon: mdi:bullhorn
+      - entity: button.REPEATER_SLUG_send_direct_advert
+        name: Send Direct Advert
+        icon: mdi:bullhorn-outline
+      - entity: number.REPEATER_SLUG_flood_advert_interval
+        name: Flood Advert Interval
+        icon: mdi:timer-sync-outline
+      - entity: number.REPEATER_SLUG_direct_advert_interval
+        name: Direct Advert Interval
+        icon: mdi:timer-outline
       - entity: button.REPEATER_SLUG_restart_repeater_service
         name: Restart Repeater Service
         icon: mdi:restart-alert
@@ -539,6 +560,18 @@ cards:
       - entity: sensor.REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour
         name: Solar Charge Rate
         icon: mdi:solar-power
+      - entity: sensor.REPEATER_SLUG_sensor_modem_bus_voltage_v
+        name: Bus Voltage
+        icon: mdi:flash-outline
+      - entity: sensor.REPEATER_SLUG_sensor_modem_current_ma
+        name: Current
+        icon: mdi:current-dc
+      - entity: sensor.REPEATER_SLUG_sensor_modem_power_mw
+        name: Power
+        icon: mdi:flash
+      - entity: sensor.REPEATER_SLUG_sensor_modem_die_temperature_c
+        name: Modem Temperature
+        icon: mdi:thermometer
 
   - type: entities
     title: External Modem GPS
