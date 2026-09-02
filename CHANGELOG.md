@@ -11,6 +11,7 @@
 - added radio-stack mode and configured-radio-count diagnostics for the Repeater's current multi-radio API payload
 - aligned the flood advert interval control with the Repeater's disjoint `0` or `3-168` hour validation instead of allowing invalid one- and two-hour writes
 - stopped retaining raw transport-key and private identity configuration in coordinator polling and redacted runtime location, identity, network, and credential fields from downloadable diagnostics
+- fixed the dashboard percentage gauges and made modem battery/solar percentages tolerate Home Assistant area prefixes and numeric entity-ID suffixes
 
 ## 1.1.6
 

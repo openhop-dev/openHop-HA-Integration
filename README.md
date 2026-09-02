@@ -121,7 +121,8 @@ To use it:
 4. Create or edit a dashboard view and paste the template into the view's YAML editor.
 5. Optionally change the view `title` and `path`.
 6. Replace the marked example MQTT broker and companion rows with entities from your installation.
-7. If your external sensor is not named `modem`, replace `_sensor_modem_` with its actual sensor slug.
+7. The modem percentage card automatically finds active battery and solar-rate entities even when Home Assistant adds an area prefix or numeric suffix.
+8. For other dynamic rows, replace the complete example entity ID with the active entity ID shown in your instance. If the external sensor is not named `modem`, also update `_sensor_modem_` in the percentage card's two match strings.
 
 The dashboard uses only built-in Home Assistant cards.
 

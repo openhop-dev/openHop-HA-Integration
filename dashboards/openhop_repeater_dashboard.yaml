@@ -8,9 +8,12 @@
 # 4. Optionally change the title and path below.
 #
 # Dynamic MQTT broker, companion, and external-sensor entities vary by install.
-# Replace the clearly marked example broker/companion rows with entities that
-# exist in your instance. If your external sensor is not named `modem`, replace
-# `_sensor_modem_` in those rows with the actual sensor slug shown by HA.
+# Home Assistant can give dynamic entities area prefixes or numeric suffixes,
+# so they cannot always be derived from REPEATER_SLUG. Replace the clearly
+# marked example rows with the complete active entity IDs from your instance.
+# The modem percentage card below searches active entities and tolerates those
+# area prefixes or numeric suffixes. If the sensor is not named `modem`, replace
+# `_sensor_modem_` in its two template match strings with the actual sensor slug.
 #
 # This template uses only built-in Home Assistant cards.
 
@@ -65,14 +68,14 @@ cards:
   - type: horizontal-stack
     cards:
       - type: gauge
-        entity: sensor.REPEATER_SLUG_current_airtime
-        name: Airtime
+        entity: sensor.REPEATER_SLUG_cpu_usage
+        name: CPU Use
         min: 0
         max: 100
         severity:
           green: 0
-          yellow: 50
-          red: 80
+          yellow: 70
+          red: 90
       - type: gauge
         entity: sensor.REPEATER_SLUG_radio_utilization
         name: Radio Use
@@ -530,6 +533,25 @@ cards:
       - entity: sensor.REPEATER_SLUG_gps_valid_checksums
         name: Valid Checksums
 
+  - type: markdown
+    title: External Modem Percentages
+    card_size: 2
+    content: |
+      {% set ns = namespace(battery=none, battery_unit='%', solar=none, solar_unit='%/h') %}
+      {% for item in states.sensor %}
+        {% if 'REPEATER_SLUG_sensor_modem_battery_percent' in item.entity_id and item.state not in ['unknown', 'unavailable'] %}
+          {% set ns.battery = item.state %}
+          {% set ns.battery_unit = item.attributes.get('unit_of_measurement', '%') %}
+        {% endif %}
+        {% if 'REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour' in item.entity_id and item.state not in ['unknown', 'unavailable'] %}
+          {% set ns.solar = item.state %}
+          {% set ns.solar_unit = item.attributes.get('unit_of_measurement', '%/h') %}
+        {% endif %}
+      {% endfor %}
+      **Battery:** {% if ns.battery is not none %}{{ ns.battery }} {{ ns.battery_unit }}{% else %}Not reported{% endif %}
+
+      **Solar charge rate:** {% if ns.solar is not none %}{{ ns.solar }} {{ ns.solar_unit }}{% else %}Not reported{% endif %}
+
   - type: entities
     title: External Modem Status
     state_color: true
@@ -548,18 +570,13 @@ cards:
         name: Modem UTC Time
         icon: mdi:clock-outline
       - type: divider
-      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_percent
-        name: Battery
-        icon: mdi:battery
       - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_v
         name: Battery Voltage
         icon: mdi:flash
       - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_mv
         name: Battery Voltage mV
         icon: mdi:flash-outline
-      - entity: sensor.REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour
-        name: Solar Charge Rate
-        icon: mdi:solar-power
+
       - entity: sensor.REPEATER_SLUG_sensor_modem_bus_voltage_v
         name: Bus Voltage
         icon: mdi:flash-outline

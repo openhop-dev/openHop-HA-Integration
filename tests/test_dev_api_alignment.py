@@ -378,6 +378,36 @@ class DevApiAlignmentTests(unittest.TestCase):
             self.assertIn(expected, changelog)
         self.assertIn("actions/setup-python@v7", workflow)
 
+    def test_dashboard_percentage_cards_use_percentage_states_and_dynamic_modem_lookup(self) -> None:
+        dashboard = (ROOT / "dashboards/openhop_repeater_dashboard.yaml").read_text(
+            encoding="utf-8"
+        )
+        gauge_stack = dashboard.split("  - type: horizontal-stack", 1)[1].split(
+            "  - type: history-graph", 1
+        )[0]
+
+        self.assertIn("sensor.REPEATER_SLUG_cpu_usage", gauge_stack)
+        self.assertIn("sensor.REPEATER_SLUG_radio_utilization", gauge_stack)
+        self.assertIn("sensor.REPEATER_SLUG_packet_drop_rate_24h", gauge_stack)
+        self.assertNotIn("sensor.REPEATER_SLUG_current_airtime", gauge_stack)
+        self.assertIn(
+            "'REPEATER_SLUG_sensor_modem_battery_percent' in item.entity_id",
+            dashboard,
+        )
+        self.assertIn(
+            "'REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour' in item.entity_id",
+            dashboard,
+        )
+        self.assertNotIn(
+            "entity: sensor.REPEATER_SLUG_sensor_modem_battery_percent\n",
+            dashboard,
+        )
+        self.assertNotIn(
+            "entity: sensor.REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour\n",
+            dashboard,
+        )
+        self.assertIn("area prefixes or numeric suffixes", dashboard)
+
     def test_example_dashboard_is_anonymized_and_includes_v1_1_6_entities(self) -> None:
         dashboard = (ROOT / "dashboards/openhop_repeater_dashboard.yaml").read_text(
             encoding="utf-8"
