@@ -196,6 +196,8 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
+    from .monitoring_entities import setup_monitoring_binary_sensors
+    setup_monitoring_binary_sensors(entry, coordinator, async_add_entities)
     async_add_entities(entities)
     add_external_sensor_entities()
     entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))

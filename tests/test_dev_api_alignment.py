@@ -190,7 +190,9 @@ class DevApiAlignmentTests(unittest.TestCase):
         ]
         self.assertTrue(helpers, "Missing external sensor value normalizer")
         helper = helpers[0]
-        namespace: dict[str, Any] = {"Any": Any}
+        import runpy
+        monitoring = runpy.run_path(str(COMPONENT / "monitoring.py"))
+        namespace: dict[str, Any] = {"Any": Any, "finite_number": monitoring["finite_number"]}
         exec(
             compile(ast.Module(body=[helper], type_ignores=[]), "<sensor-value>", "exec"),
             namespace,

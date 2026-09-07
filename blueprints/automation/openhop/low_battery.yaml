@@ -1,0 +1,40 @@
+blueprint:
+  name: "openHop: Low battery"
+  description: >-
+    Select one entity and your own actions. The condition must persist for the
+    selected duration. No notification service or corrective action is assumed.
+    Timers reset after Home Assistant restart or automation reload. Threshold
+    alerts trigger on crossing, not repeatedly while already beyond the limit.
+  domain: automation
+  input:
+    entity:
+      name: Entity to monitor
+      selector:
+        entity:
+          domain: sensor
+    duration:
+      name: Sustained duration
+      default:
+        minutes: 5
+      selector:
+        duration: {}
+    threshold:
+      name: Threshold in the selected sensor unit
+      default: 20
+      selector:
+        number:
+          min: -100
+          max: 1000
+          mode: box
+    actions:
+      name: Actions to run
+      selector:
+        action: {}
+trigger:
+  - platform: numeric_state
+    entity_id: !input entity
+    below: !input threshold
+    for: !input duration
+condition: []
+action: !input actions
+mode: single

@@ -38,6 +38,7 @@ The integration uses coordinated local polling instead of making a separate API 
 - Hardware, process, network, database, and metrics diagnostics
 - GPS position, fix, satellite, time-sync, and location-update data
 - External sensor-manager entities, including supported modem and UPS readings
+- Application-plugin health counts (installed, enabled, running, and failed)
 - Neighbor-link counts, neighbor-scope queries, and on-demand neighbor history
 - Default-region, duty-cycle, advert-rate, advert-schedule, and Repeater-mode controls
 - Update status, update-channel selection, and update actions
@@ -111,7 +112,7 @@ A comprehensive native Lovelace view is included at:
 
 [`dashboards/openhop_repeater_dashboard.yaml`](dashboards/openhop_repeater_dashboard.yaml)
 
-The template covers radio health and stack diagnostics, packet flow, LBT diagnostics, routing, neighbor links, controls, advert tuning, MQTT, companions, GPS, external modem power readings, updates, and database metrics.
+The template covers radio health and stack diagnostics, packet flow, LBT diagnostics, routing, neighbor links, plugin health, controls, advert tuning, MQTT, companions, GPS, external modem power readings, updates, and database metrics.
 
 To use it:
 
@@ -142,6 +143,28 @@ Open **Developer tools → Actions** and search for `openHop Repeater` or `pymc_
 
 The raw radio-config action accepts the Repeater dev `radio_id` field for multi-radio targeting and `direct_advert_interval_hours` for the additional advert schedule. The raw MQTT-config action accepts custom `base_topic` values and neighbor-publisher settings supported by current Repeater dev builds.
 
+### Plugin health and bucketed neighbor history
+
+Application-plugin counts use the installed plugin manager's lightweight `/api/plugins/` list on the shared polling schedule. These are separate from external sensor-manager readings. Counts and an allowlist of plugin ID, name, version, enabled, state, and has_runtime enter coordinator data. Paths, settings, logs, PID, descriptions and repository URLs are not retained. An empty inventory reports zero; unsupported/unavailable manager endpoints or malformed inventory leave the counts unknown rather than falsely reporting a healthy empty installation. Authentication and connection failures still fail the regular refresh.
+
+`Enabled plugins` is not the same as `Running plugins`: UI-only plugins can be enabled without a running process. `Failed plugins` counts only the manager's explicit `FAILED` state, not stopped/disabled plugins.
+
+The existing `pymc_repeater.get_neighbor_link_history` response-returning action accepts optional `bucket_seconds` (integer, minimum 60). Omit it to preserve the raw `rows` response. Supply it to receive `buckets`, `bucket_seconds`, and a bucket `count`; `limit` caps returned buckets rather than raw observations. This requires a Repeater build supporting bucketed history and is never polled automatically. For example:
+
+```yaml
+action: pymc_repeater.get_neighbor_link_history
+data:
+  config_entry_id: YOUR_CONFIG_ENTRY_ID
+  peer_hash: AB
+  path_hash_size: 1
+  hours: 24
+  limit: 1000
+  bucket_seconds: 300
+response_variable: neighbor_history
+```
+
+Replace the example entry ID and peer hash with your target. Omit `bucket_seconds` for older Repeater builds; there is no silent fallback from buckets to raw rows. See [installed API alignment notes](docs/installed-api-alignment.md) for the audited source contract and intentionally deferred capabilities.
+
 ## Authentication and persistent storage
 
 The Home Assistant integration stores an API token, while the Repeater stores the matching token hash in its SQLite database. Both the Repeater JWT secret and SQLite database must persist across Repeater restarts.
@@ -171,6 +194,10 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 - [openHop Repeater Home Assistant add-on](https://github.com/openhop-dev/openHop-HA-Add-on)
 - [Release notes](CHANGELOG.md)
 - [Issue tracker](https://github.com/openhop-dev/openHop-HA-Integration/issues)
+
+## Operational monitoring
+
+See [operational monitoring](docs/operational-monitoring.md) for radio child devices, source freshness and component diagnostics, native update installation safety, plugin health, battery units, alert blueprints, and the separate compact operations view.
 
 ## Development
 

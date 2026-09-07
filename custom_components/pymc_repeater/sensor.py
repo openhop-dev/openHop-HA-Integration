@@ -21,6 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
+from .monitoring import finite_number, measurement_class, reading_usable
 from .api import get_repeater_name_from_stats
 from .const import (
     CONF_DATA_SIZE_UNIT,
@@ -217,14 +218,7 @@ def _normalize_external_sensor_value(value: Any, *, has_unit: bool) -> Any:
     """Coerce measurement strings and reject invalid measurement states."""
     if not has_unit:
         return value
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
+    return finite_number(value)
 
 
 def _external_sensor_ok_count(data: dict[str, Any]) -> int:
@@ -945,6 +939,42 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         },
     ),
     PyMCSensorDescription(
+        key="plugins_installed",
+        translation_key="plugins_installed",
+        name="Installed plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "installed"),
+    ),
+    PyMCSensorDescription(
+        key="plugins_enabled",
+        translation_key="plugins_enabled",
+        name="Enabled plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "enabled"),
+    ),
+    PyMCSensorDescription(
+        key="plugins_running",
+        translation_key="plugins_running",
+        name="Running plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "running"),
+    ),
+    PyMCSensorDescription(
+        key="plugins_failed",
+        translation_key="plugins_failed",
+        name="Failed plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "failed"),
+    ),
+    PyMCSensorDescription(
         key="neighbor_link_count",
         name="Observed neighbor links",
         icon="mdi:access-point-network",
@@ -1289,6 +1319,8 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
+    from .monitoring_entities import setup_monitoring_sensors
+    setup_monitoring_sensors(entry, coordinator, async_add_entities)
     async_add_entities(entities)
     add_external_sensor_entities()
     entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
@@ -1525,6 +1557,8 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
         "battery_percent": PERCENTAGE,
         "battery_percentage": PERCENTAGE,
         "humidity_pct": PERCENTAGE,
+        "voltage_v": "V",
+        "voltage_mv": "mV",
         "battery_voltage_v": "V",
         "bus_voltage_v": "V",
         "shunt_voltage_v": "V",
@@ -1591,6 +1625,7 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
         )
         self._attr_icon = self._ICON_HINTS.get(field, "mdi:chip")
         self._attr_native_unit_of_measurement = self._UNIT_HINTS.get(field)
+        self._attr_device_class = measurement_class(field) if self._attr_native_unit_of_measurement else None
         self._attr_state_class = (
             SensorStateClass.MEASUREMENT if self._attr_native_unit_of_measurement else None
         )
@@ -1607,7 +1642,8 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
     def available(self) -> bool:
         reading = self._get_reading()
         payload = _external_sensor_payload(reading) if isinstance(reading, dict) else {}
-        if not super().available or self._field not in payload:
+        if (not super().available or self._field not in payload
+                or not reading_usable(reading or {}, _nested(self.coordinator.data, "stats", "sensors", "poll_interval_seconds"))):
             return False
         return (
             _normalize_external_sensor_value(

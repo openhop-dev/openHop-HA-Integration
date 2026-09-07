@@ -604,12 +604,20 @@ get_neighbor_links:
 
 get_neighbor_link_history:
   name: Get neighbor link history
-  description: Return stored packet observations for one upstream neighbor hash.
+  description: Return raw rows or optional time-bucketed observations for one upstream neighbor hash.
   fields:
     config_entry_id:
       selector:
         config_entry:
           integration: pymc_repeater
+    bucket_seconds:
+      description: Optional bucket width in seconds (minimum 60). Omit for raw rows; supplying it returns buckets instead.
+      selector:
+        number:
+          min: 60
+          step: 1
+          mode: box
+          unit_of_measurement: s
     peer_hash:
       required: true
       selector:

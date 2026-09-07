@@ -44,6 +44,10 @@
   },
   "entity": {
     "sensor": {
+      "plugins_installed": {"name": "Installed plugins"},
+      "plugins_enabled": {"name": "Enabled plugins"},
+      "plugins_running": {"name": "Running plugins"},
+      "plugins_failed": {"name": "Failed plugins"},
       "repeater_version": {
         "name": "Repeater version"
       },

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 
@@ -54,6 +54,7 @@ class PyMCRepeaterDataUpdateCoordinator(DataUpdateCoordinator[dict]):
         )
         self.config_entry = entry
         self.api = api
+        self.last_successful_poll: datetime | None = None
         self._gps_stream_task: asyncio.Task | None = None
 
     async def async_start_runtime(self) -> None:
@@ -71,7 +72,9 @@ class PyMCRepeaterDataUpdateCoordinator(DataUpdateCoordinator[dict]):
 
     async def _async_update_data(self) -> dict:
         try:
-            return await self.api.async_fetch_all()
+            data = await self.api.async_fetch_all()
+            self.last_successful_poll = datetime.now(timezone.utc)
+            return data
         except PyMCRepeaterAuthenticationError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except PyMCRepeaterCannotConnect as err:

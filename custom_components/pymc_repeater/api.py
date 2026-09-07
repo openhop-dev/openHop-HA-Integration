@@ -173,6 +173,7 @@ class PyMCRepeaterApiClient:
             "lbt_diagnostics": self.async_get_lbt_diagnostics(),
             "default_region": self.async_get_default_region(),
             "neighbor_links": self.async_get_neighbor_links(),
+            "plugin_summary": self.async_get_plugin_summary(),
         }
 
         results = await asyncio.gather(*endpoints.values(), return_exceptions=True)
@@ -257,6 +258,30 @@ class PyMCRepeaterApiClient:
             },
         )
 
+    async def async_get_plugin_summary(self) -> dict[str, Any]:
+        """Return counts and allowlisted plugin health, never paths or configuration."""
+        # Unlike most endpoints, this API returns a top-level plugins list.
+        payload = await self._async_request_wrapped("GET", "/api/plugins/")
+        plugins = payload.get("plugins") if isinstance(payload, dict) else None
+        if not isinstance(plugins, list) or any(
+            not isinstance(item, dict)
+            or not isinstance(item.get("enabled"), bool)
+            or not isinstance(item.get("state"), str)
+            for item in plugins
+        ):
+            raise PyMCRepeaterApiError("Invalid plugin inventory response")
+        return {
+            "plugins": [
+                {key: item[key] for key in ("id", "name", "version", "enabled", "state", "has_runtime")
+                 if key in item and isinstance(item[key], (str, bool))}
+                for item in plugins if isinstance(item.get("id"), str) and item["id"]
+            ],
+            "installed": len(plugins),
+            "enabled": sum(item["enabled"] for item in plugins),
+            "running": sum(item["state"] == "RUNNING" for item in plugins),
+            "failed": sum(item["state"] == "FAILED" for item in plugins),
+        }
+
     async def async_get_neighbor_link_history(
         self,
         *,
@@ -264,17 +289,19 @@ class PyMCRepeaterApiClient:
         path_hash_size: int,
         hours: int = DEFAULT_PACKET_WINDOW_HOURS,
         limit: int = 1000,
+        bucket_seconds: int | None = None,
     ) -> dict[str, Any]:
-        """Return stored observations for one upstream neighbor link."""
+        """Return raw observations or optional time buckets for one neighbor."""
+        params: dict[str, Any] = {
+            "peer_hash": peer_hash,
+            "path_hash_size": path_hash_size,
+            "hours": hours,
+            "limit": limit,
+        }
+        if bucket_seconds is not None:
+            params["bucket_seconds"] = bucket_seconds
         return await self._async_request_wrapped(
-            "GET",
-            "/api/neighbor_link_history",
-            params={
-                "peer_hash": peer_hash,
-                "path_hash_size": path_hash_size,
-                "hours": hours,
-                "limit": limit,
-            },
+            "GET", "/api/neighbor_link_history", params=params
         )
 
     async def async_get_noise_floor_stats(self) -> dict[str, Any]:

@@ -269,6 +269,16 @@ cards:
         name: Allow Unscoped Flood
         icon: mdi:flood
 
+  # Plugin-manager counts are unknown on older builds or if the manager is down.
+  - type: entities
+    title: Plugin Health
+    show_header_toggle: false
+    entities:
+      - entity: sensor.REPEATER_SLUG_installed_plugins
+      - entity: sensor.REPEATER_SLUG_enabled_plugins
+      - entity: sensor.REPEATER_SLUG_running_plugins
+      - entity: sensor.REPEATER_SLUG_failed_plugins
+
   - type: entities
     title: Neighbor Links
     state_color: true

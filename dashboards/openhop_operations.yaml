@@ -1,0 +1,36 @@
+# Single Lovelace view, not a full dashboard. Replace REPEATER_SLUG with
+# your device prefix. Replace dynamic rows with exact entity IDs from HA.
+# Built-in cards only. Keep the comprehensive dashboard for diagnostics.
+title: openHop operations
+path: openhop-operations
+icon: mdi:radio-tower
+cards:
+  - type: entities
+    title: Availability and updates
+    show_header_toggle: false
+    entities:
+      - binary_sensor.REPEATER_SLUG_component_api_connected
+      - sensor.REPEATER_SLUG_component_api_last_success
+      - update.REPEATER_SLUG_repeater_software
+      - sensor.REPEATER_SLUG_repeater_version
+  - type: entities
+    title: Component health
+    show_header_toggle: false
+    entities:
+      - binary_sensor.REPEATER_SLUG_component_stats_problem
+      - binary_sensor.REPEATER_SLUG_component_mqtt_status_problem
+      - binary_sensor.REPEATER_SLUG_component_plugin_summary_problem
+      - sensor.REPEATER_SLUG_failed_plugins
+  - type: markdown
+    title: Site-specific monitoring
+    content: >-
+      Add your exact radio inventory/settings, selected MQTT broker, battery percentage,
+      voltage, charge-state trend, temperature, sensor age/stale, and individual plugin problem
+      entities here using the card editor. Dynamic names and registry suffixes
+      vary by installation. Missing or stale readings are not healthy zeroes.
+  - type: history-graph
+    title: Resource trends
+    hours_to_show: 12
+    entities:
+      - sensor.REPEATER_SLUG_cpu_usage
+      - sensor.REPEATER_SLUG_memory_usage

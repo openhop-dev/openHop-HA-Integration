@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- added stable radio child inventory and supported read-only radio settings without allocating aggregate RF metrics; the installed API does not establish genuine per-radio telemetry
+- derive charging/discharging/neutral battery trend only from fresh finite signed solar charge rate; zero does not claim a full battery
+- added shared-poll component diagnostics, last successful poll, source age/stale sensors and conservative measurement availability
+- added a native cached-status update entity with explicit installation only, preserving all existing update controls
+- added battery/electrical/temperature device classes, generic voltage units and rejection of nonfinite measurements
+- added seven opt-in alert blueprints with user-selected actions and a separate compact operations dashboard
+
+- added aggregate installed, enabled, running, and failed application-plugin diagnostics and dashboard rows, plus allowlisted per-ID version/state/enabled/runtime/problem entities, without retaining plugin paths, settings, or repository metadata
+- added optional `bucket_seconds` to the existing neighbor-history action; raw `rows` remain the default and bucketed requests return `buckets`
+- checked these additions against installed Repeater 1.1.2.dev325 source and added executable stdlib client/sensor behavior tests (not a live Home Assistant runtime test)
+
 - aligned advert controls with current Repeater dev support for explicit flood/direct sends and independent flood/direct schedules
 - added MQTT neighbors publication status, a manual publication control, stored neighbor-scope retrieval, and one-neighbor scope queries
 - allowed the neighbor-scope query action to wait through the Repeater's 45-second response window instead of hitting the integration's normal 10-second API timeout

@@ -19,6 +19,7 @@ from .const import CONF_API_TOKEN, DOMAIN
 from .coordinator import PyMCRepeaterDataUpdateCoordinator
 
 PLATFORMS: list[Platform] = [
+    Platform.UPDATE,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
@@ -786,6 +787,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 path_hash_size=call.data["path_hash_size"],
                 hours=call.data.get("hours", 24),
                 limit=call.data.get("limit", 1000),
+                bucket_seconds=call.data.get("bucket_seconds"),
             ),
             always_return=True,
         ),
@@ -793,6 +795,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("peer_hash"): str,
+                vol.Optional("bucket_seconds"): vol.All(
+                    vol.Coerce(int), vol.Range(min=60)
+                ),
                 vol.Required("path_hash_size"): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=3)
                 ),
