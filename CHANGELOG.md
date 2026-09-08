@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- corrected comprehensive dashboard density with natural-height vertical-stack columns, compact update management, six primary overview metrics plus optional battery/temperature, named badges, and shorter radio/source/plugin labels; retained entity references and ordered diagnostic bands
+
+- reorganized the comprehensive view into responsive ordered Sections bands: live metrics and short single-unit trends first, operations next, complete grouped diagnostics and notes last; shortened display-only labels without renaming entities or removing controls
+
+- refreshed the comprehensive built-in dashboard with component problems, source freshness, radio child settings, individual plugin rows, battery charge trend and native update more-info, with explicit same-Repeater dynamic entity replacement guidance
+
 - fixed single-radio settings discovery to read the actual nested stats configuration, restoring frequency, bandwidth, TX power, spreading factor, coding rate, and preamble entities
 
 - added stable radio child inventory and supported read-only radio settings without allocating aggregate RF metrics; the installed API does not establish genuine per-radio telemetry

@@ -384,14 +384,15 @@ class DevApiAlignmentTests(unittest.TestCase):
         dashboard = (ROOT / "dashboards/openhop_repeater_dashboard.yaml").read_text(
             encoding="utf-8"
         )
-        gauge_stack = dashboard.split("  - type: horizontal-stack", 1)[1].split(
-            "  - type: history-graph", 1
+        overview = dashboard.split("heading: Live overview", 1)[1].split(
+            "heading: Recent trends", 1
         )[0]
 
-        self.assertIn("sensor.REPEATER_SLUG_cpu_usage", gauge_stack)
-        self.assertIn("sensor.REPEATER_SLUG_radio_utilization", gauge_stack)
-        self.assertIn("sensor.REPEATER_SLUG_packet_drop_rate_24h", gauge_stack)
-        self.assertNotIn("sensor.REPEATER_SLUG_current_airtime", gauge_stack)
+        self.assertIn("sensor.REPEATER_SLUG_cpu_usage", overview)
+        self.assertIn("sensor.REPEATER_SLUG_radio_utilization", overview)
+        self.assertIn("sensor.REPEATER_SLUG_packet_drop_rate_24h", overview)
+        # Airtime has its own native-unit tile; it is never a percentage gauge.
+        self.assertNotIn("type: gauge", dashboard)
         self.assertIn(
             "'REPEATER_SLUG_sensor_modem_battery_percent' in item.entity_id",
             dashboard,
