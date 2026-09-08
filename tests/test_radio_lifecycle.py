@@ -179,6 +179,61 @@ class RadioLifecycleTests(unittest.TestCase):
         self.poll("radio0")
         self.assertIsNone(self.ns["authoritative_radio_ids"](self.coordinator, self.entry))
 
+    def test_single_fabric_alias_roundtrip_retires_and_restores_without_identity_changes(self):
+        self.entry.options = {"radio_id_aliases": {"local": "radio0"}}
+        original = self.registry.add("radio0", Disabler.INTEGRATION)
+        user_disabled = self.registry.add("user", Disabler.USER)
+        link = self.registry.add("link")
+        before = (deepcopy(original.identifiers), original.name_by_user)
+        self.poll("local", "link", "user")
+        self.assertIsNone(original.disabled_by)
+        for index in range(2):
+            self.coordinator.data = snapshot("radio0")
+            self.coordinator.data["stats"]["radio_stack"]["mode"] = "single_fabric"
+            self.coordinator.last_successful_poll += timedelta(seconds=15)
+            self.lifecycle.async_reconcile()
+            self.assertEqual(self.ns["authoritative_radio_ids"](self.coordinator, self.entry), {"radio0"})
+            if index == 0:
+                self.lifecycle.async_reconcile()  # Same stamp/GPS cannot confirm absence.
+                self.assertIsNone(link.disabled_by)
+                self.assertFalse(self.lifecycle.can_remove(link))
+        self.assertIs(link.disabled_by, Disabler.INTEGRATION)
+        self.assertTrue(self.lifecycle.can_remove(link))
+        self.assertIs(user_disabled.disabled_by, Disabler.USER)
+        self.poll("local", "link", "user")
+        self.assertIsNone(link.disabled_by)
+        self.assertIs(user_disabled.disabled_by, Disabler.USER)
+        self.assertIs(self.registry.devices["radio0"], original)
+        self.assertEqual((original.identifiers, original.name_by_user), before)
+        self.assertTrue(all(set(fields) == {"disabled_by"} for _, fields in self.registry.writes))
+
+    def test_single_fabric_keeps_single_mode_validation_guards(self):
+        cases = [snapshot(), snapshot("radio0", "link"), snapshot("radio0", "radio0")]
+        for field, value in (("radio_ids", [None]), ("radio_ids", ["bad id"]), ("error", "offline")):
+            data = snapshot("radio0")
+            data["stats"]["radio_stack"][field] = value
+            cases.append(data)
+        for rows in ([None], [{"id": "other"}], [{"id": "radio0"}, {"id": "radio0"}],
+                     [{"id": "radio0", "radio_id": "other"}], [{"id": "radio0", "radio": None}]):
+            data = snapshot("radio0")
+            data["stats"]["radios"] = rows
+            cases.append(data)
+        absent = self.registry.add("absent")
+        for data in cases:
+            with self.subTest(data=data):
+                self.coordinator.data = snapshot("radio0")
+                self.coordinator.data["stats"]["radio_stack"]["mode"] = "single_fabric"
+                self.coordinator.last_successful_poll += timedelta(seconds=15)
+                self.lifecycle.async_reconcile()
+                data["stats"]["radio_stack"]["mode"] = "single_fabric"
+                self.coordinator.data = data
+                self.coordinator.last_successful_poll += timedelta(seconds=15)
+                self.lifecycle.async_reconcile()
+                self.assertIsNone(self.ns["authoritative_radio_ids"](self.coordinator, self.entry))
+                self.assertIsNone(absent.disabled_by)
+                self.assertFalse(self.lifecycle.can_remove(absent))
+        self.assertEqual(self.registry.writes, [])
+
     def test_unload_and_idempotent_start(self):
         self.lifecycle.async_start()
         self.lifecycle.async_start()

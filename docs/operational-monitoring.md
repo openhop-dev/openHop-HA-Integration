@@ -10,13 +10,20 @@ type when supplied, otherwise `configured`. `radio_stack.radio_ids` also works
 when `radios` is empty. No aggregate packet, noise, CRC, RSSI or connectivity value
 is attributed to a child radio. Read-only configuration sensors expose frequency
 (Hz), bandwidth (Hz), TX power (dBm), spreading factor, coding rate and preamble
-length only when supplied in that radio's `radio` configuration. In explicit
-single mode, global `config.radio` may fill missing fields for the sole named
-default radio, never for multiple radios. Settings are configuration, not proof
-of measured RF behavior or successful hardware application.
+length only when supplied in that radio's `radio` configuration. Settings are
+configuration, not proof of measured RF behavior or successful hardware application.
 Genuine per-radio traffic/health sensors remain
 unsupported until a verified per-radio telemetry contract exists. Quiet RF is
 not a failure signal.
+
+- added parent repeater `radio_status` with recognized aggregate states `ok` and `degraded` and `disabled` from existing stats polling and unknown for missing or unrecognized states
+- added parent repeater `radio_problem` for degraded or disabled status or an explicit aggregate radio error and reported clear only for `ok` with no error
+- exposed `radio_error` on `radio_status` as true for nonempty error text or false for a known state without an error and otherwise unknown without publishing raw exception text in these entities or dashboard cards
+- kept aggregate radio health separate from api connectivity and per-radio configuration without inferring rf delivery from a healthy api or quiet traffic
+- preferred configured `radio_type` over legacy `type` without treating either as live telemetry
+- allowed global `config.radio` to fill missing settings only for a validated sole named default in explicit `single` or `single_fabric` mode and never across multiple radios or ambiguous inventories
+- recognized `single_fabric` in the existing reversible radio lifecycle with exactly one authoritative radio id and unchanged alias and two-full-poll absence safeguards
+- added aggregate radio status and problem rows with a radio badge and an explicit problem banner to the comprehensive dashboard
 
 ## Preserving radio names after a backend ID change
 
@@ -66,13 +73,23 @@ report explicit endpoint errors for stats, MQTT, hardware, GPS, plugins and upda
 status. These indicate API payload health, not a claim that every component's
 physical subsystem works.
 
-Each sensor-manager reading gains age (seconds) and stale diagnostics. Stale means
-source age exceeds three backend `poll_interval_seconds`, with a 60-second minimum.
+Each sensor-manager reading gains age (seconds) and stale diagnostics.
 Missing, invalid, naive or future timestamps, or missing/invalid source cadence,
 are unknown, not fresh. Missing sources become unavailable. Source measurements
 are unavailable when the read failed, stale, or freshness cannot be established.
 Freshness is evaluated on existing coordinator notifications, with shared-poll
 resolution; no high-frequency timer or per-sensor polling task is added.
+
+- preferred the reading envelope's effective `poll_interval_seconds` and marked readings stale after three source intervals with a 60-second minimum
+- retained the legacy global-summary interval only when per-reading metadata was absent and left present but invalid metadata unknown rather than substituting the global interval
+- documented that the required backend scheduler metadata change had not yet been released or deployed and that the integration alone could not supply effective per-reading cadence or prove a legacy plugin's cadence from the global fallback
+
+- aligned advanced action http budgets to cover backend waits with ping timeout plus 6 seconds and companion status or telemetry timeout plus 10 seconds
+- enforced reply wait bounds of 1–60 seconds for ping and 1–120 seconds for companion status and telemetry
+- scaled manual cad http budgets with backend-clamped sample and timeout bounds plus 7 seconds with a 10-second minimum and 167-second maximum while leaving asynchronous calibration start separate
+- allowed 35 seconds for companion text and channel sends and 20 seconds for login and 25 seconds for commands
+- added optional `response_variable` support to `pymc_repeater.companion_request_status` and `pymc_repeater.companion_request_telemetry` returning unwrapped backend dictionaries or wrapping other results under `result` without a coordinator refresh or automatic polling or entity-state storage
+- preserved calls without requested responses and converted expected client failures to action errors including explicit companion `sent: false` while accepting older results without `sent`
 
 ## Plugins
 

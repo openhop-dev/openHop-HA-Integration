@@ -4,6 +4,16 @@
 
 ## 1.2.0
 
+- added aggregate parent radio status and problem entities with a boolean or unknown radio error attribute without exposing raw error text or inferring per-radio health from api connectivity
+- added aggregate radio health dashboard rows and a badge and problem banner
+- recognized `single_fabric` in reversible radio lifecycle handling and guarded single-radio global settings fallback while preferring configured `radio_type` over legacy `type`
+- aligned advanced action http budgets with backend waits for ping and manual cad checks and companion sends and login and commands
+- bounded ping reply waits to 1–60 seconds and companion status and telemetry waits to 1–120 seconds with finite http margins
+- added optional status and telemetry action responses while preserving calls without responses and keeping results out of polling and entity attributes
+- surfaced explicit companion send failures as action errors while retaining compatibility with older results without `sent`
+- preferred per-reading `poll_interval_seconds` for source freshness with legacy global-summary fallback only when metadata was absent and unknown freshness for invalid metadata
+- documented the required backend cadence metadata change as not yet released or deployed without claiming that an integration-only update established legacy plugin cadence
+
 - added automatic retirement and restoration of removed radio devices while preserving custom names and registry IDs, with safe explicit removal of confirmed absent radios
 - added explicit radio ID aliases to preserve existing Home Assistant radio devices, custom names, and entity IDs when a repeater's runtime radio ID changes
 - added scheduled repeater update checks at one minute past each hour in Home Assistant's timezone, respecting active checks, installations, and GitHub rate-limit holds without fetching branch lists

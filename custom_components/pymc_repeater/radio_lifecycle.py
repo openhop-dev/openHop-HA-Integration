@@ -34,7 +34,7 @@ def authoritative_radio_ids(
 ) -> set[str] | None:
     """Return canonical IDs only when the complete inventory is unambiguous.
 
-    Empty inventories are deliberately unknown: neither supported mode proves a
+    Empty inventories are deliberately unknown: no supported mode proves a
     healthy zero-radio topology. Optional settings rows may be omitted, but any
     supplied rows must agree with the authoritative stack IDs. Validate before
     normalization, which intentionally drops ambiguous telemetry rows.
@@ -53,13 +53,13 @@ def authoritative_radio_ids(
     except RecursionError:
         return None
     stack = stats.get("radio_stack")
-    if not isinstance(stack, dict) or stack.get("mode") not in ("single", "multi"):
+    if not isinstance(stack, dict) or stack.get("mode") not in ("single", "single_fabric", "multi"):
         return None
     ids = stack.get("radio_ids")
     if not isinstance(ids, list) or not ids or not all(_valid_id(rid) for rid in ids):
         return None
     sources = set(ids)
-    if len(sources) != len(ids) or (stack["mode"] == "single" and len(ids) != 1):
+    if len(sources) != len(ids) or (stack["mode"] in ("single", "single_fabric") and len(ids) != 1):
         return None
     rows = stats.get("radios", [])
     if not isinstance(rows, list):

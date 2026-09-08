@@ -72,6 +72,39 @@ def _mqtt_neighbors_status(data: dict[str, Any]) -> dict[str, Any]:
     return status if isinstance(status, dict) else {}
 
 
+def _radio_status(data: dict[str, Any]) -> str | None:
+    """Return only known aggregate runtime states, never inferred RF health."""
+    stats = _nested(data, "stats")
+    if not isinstance(stats, dict) or stats.get("error") or stats.get("success") is False:
+        return None
+    status = stats.get("radio_status")
+    return status if isinstance(status, str) and status in ("ok", "degraded", "disabled") else None
+
+
+def _radio_error(data: dict[str, Any]) -> bool | None:
+    """Expose presence only: backend exception text can contain private data."""
+    stats = _nested(data, "stats")
+    if not isinstance(stats, dict) or stats.get("error") or stats.get("success") is False:
+        return None
+    error = stats.get("radio_error")
+    if isinstance(error, str) and error.strip():
+        return True
+    # get_stats omits radio_error when clear. Without a known runtime state,
+    # omission is not evidence of health (older backends omit both fields).
+    if error is None or isinstance(error, str):
+        return False if _radio_status(data) is not None else None
+    return None
+
+
+def _radio_problem(data: dict[str, Any]) -> bool | None:
+    """Disabled/degraded or an explicit aggregate error is a radio problem."""
+    status = _radio_status(data)
+    error = _radio_error(data)
+    if status in ("degraded", "disabled") or error is True:
+        return True
+    return False if status == "ok" and error is False else None
+
+
 def _radio_stack(data: dict[str, Any]) -> dict[str, Any]:
     stack = _nested(data, "stats", "radio_stack") or {}
     return stack if isinstance(stack, dict) else {}
@@ -351,6 +384,17 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
             "image_version": _nested(data, "stats", "image_version"),
             "node_name": get_repeater_name_from_stats(_nested(data, "stats") or {}),
         },
+    ),
+    PyMCSensorDescription(
+        key="radio_status",
+        translation_key="radio_status",
+        name="Radio status",
+        icon="mdi:radio-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=SensorDeviceClass.ENUM,
+        options=["ok", "degraded", "disabled"],
+        value_fn=_radio_status,
+        attrs_fn=lambda data: {"radio_error": _radio_error(data)},
     ),
     PyMCSensorDescription(
         key="radio_stack_mode",

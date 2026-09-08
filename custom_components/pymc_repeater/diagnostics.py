@@ -34,6 +34,7 @@ TO_REDACT = {
     "identity_hash",
     "companion_hash",
     "room_hash",
+    "radio_error",
 }
 
 

@@ -143,6 +143,11 @@ The integration exposes Home Assistant actions for supported Repeater operations
 
 Open **Developer tools → Actions** and search for `openHop Repeater` or `pymc_repeater` to see the actions and their current fields.
 
+- aligned advanced action http budgets with backend waits plus a finite margin for ping and manual cad checks and companion text sends and login and commands
+- bounded ping reply waits to 1–60 seconds with 6 additional http seconds and companion status and telemetry waits to 1–120 seconds with 10 additional http seconds
+- added optional `response_variable` support to `pymc_repeater.companion_request_status` and `pymc_repeater.companion_request_telemetry` with unwrapped backend dictionaries and non-dictionary results wrapped under `result` while preserving calls without responses and avoiding polling or entity attributes for these results
+- surfaced explicit companion `sent: false` results as action errors without treating omitted `sent` fields on older backends as failures
+
 The raw radio-config action accepts the Repeater dev `radio_id` field for multi-radio targeting and `direct_advert_interval_hours` for the additional advert schedule. The raw MQTT-config action accepts custom `base_topic` values and neighbor-publisher settings supported by current Repeater dev builds.
 
 ### Plugin health and bucketed neighbor history
@@ -198,6 +203,11 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 - [Issue tracker](https://github.com/openhop-dev/openHop-HA-Integration/issues)
 
 ## Operational monitoring
+
+- added parent repeater `radio_status` and `radio_problem` entities from aggregate runtime health rather than api connectivity or configured child radios with `radio_error` exposed only as a boolean or unknown attribute and never raw exception text
+- recognized `single_fabric` for single-radio lifecycle handling and guarded global settings fallback to the sole named default while preferring `radio_type` over legacy `type` for configured inventory
+- preferred each reading envelope's `poll_interval_seconds` for freshness and retained the legacy global-summary fallback only when that field was absent
+- documented that effective per-reading cadence required a companion backend scheduler metadata change not yet released or deployed and that updating this integration alone could not establish legacy plugin cadence
 
 Aggregate flood/direct received, transmitted, and duplicate packet counters are
 exposed on the parent Repeater device using existing stats polling. These are

@@ -15,7 +15,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .api import PyMCRepeaterApiClient, get_repeater_name_from_stats
+from .api import PyMCRepeaterApiClient, PyMCRepeaterError, get_repeater_name_from_stats
 from .const import CONF_API_TOKEN, DOMAIN
 from .coordinator import PyMCRepeaterDataUpdateCoordinator
 from .radio_lifecycle import RadioLifecycle
@@ -171,7 +171,10 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     ) -> None:
         entry_id = _resolve_entry_id(hass, call.data)
         api: PyMCRepeaterApiClient = hass.data[DOMAIN][entry_id]["api"]
-        await func(api, entry_id)
+        try:
+            await func(api, entry_id)
+        except PyMCRepeaterError as err:
+            raise HomeAssistantError(str(err)) from err
         if refresh:
             await _async_refresh_entry(hass, entry_id)
 
@@ -184,7 +187,10 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     ) -> ServiceResponse | None:
         entry_id = _resolve_entry_id(hass, call.data)
         api: PyMCRepeaterApiClient = hass.data[DOMAIN][entry_id]["api"]
-        result = await func(api, entry_id)
+        try:
+            result = await func(api, entry_id)
+        except PyMCRepeaterError as err:
+            raise HomeAssistantError(str(err)) from err
         if refresh:
             await _async_refresh_entry(hass, entry_id)
         if not always_return and not getattr(call, "return_response", False):
@@ -208,7 +214,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("target_id"): str,
-                vol.Optional("timeout", default=10): vol.Coerce(int),
+                vol.Optional("timeout", default=10): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=60)
+                ),
             }
         ),
     )
@@ -537,7 +545,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_REQUEST_STATUS,
-        lambda call: _with_api(
+        lambda call: _with_api_response(
             call,
             lambda api, _: api.async_companion_request_status(
                 pub_key=call.data["pub_key"],
@@ -550,16 +558,19 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("pub_key"): str,
-                vol.Optional("timeout", default=15.0): vol.Coerce(float),
+                vol.Optional("timeout", default=15.0): vol.All(
+                    vol.Coerce(float), vol.Range(min=1, max=120)
+                ),
                 vol.Optional("companion_name"): str,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_REQUEST_TELEMETRY,
-        lambda call: _with_api(
+        lambda call: _with_api_response(
             call,
             lambda api, _: api.async_companion_request_telemetry(
                 pub_key=call.data["pub_key"],
@@ -575,13 +586,16 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("pub_key"): str,
-                vol.Optional("timeout", default=20.0): vol.Coerce(float),
+                vol.Optional("timeout", default=20.0): vol.All(
+                    vol.Coerce(float), vol.Range(min=1, max=120)
+                ),
                 vol.Optional("companion_name"): str,
                 vol.Optional("want_base", default=True): bool,
                 vol.Optional("want_location", default=True): bool,
                 vol.Optional("want_environment", default=True): bool,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     hass.services.async_register(

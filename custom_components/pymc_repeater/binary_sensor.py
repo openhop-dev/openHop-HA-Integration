@@ -25,6 +25,7 @@ from .sensor import (
     _external_sensor_readings,
     _lbt_summary,
     _nested,
+    _radio_problem,
     _room_items,
 )
 
@@ -33,7 +34,7 @@ from .sensor import (
 class PyMCBinarySensorDescription(BinarySensorEntityDescription):
     """Binary sensor description."""
 
-    value_fn: Callable[[dict[str, Any]], bool]
+    value_fn: Callable[[dict[str, Any]], bool | None]
 
 
 def _any_mqtt_connected(data: dict[str, Any]) -> bool:
@@ -42,6 +43,15 @@ def _any_mqtt_connected(data: dict[str, Any]) -> bool:
 
 
 BINARY_SENSORS: tuple[PyMCBinarySensorDescription, ...] = (
+    PyMCBinarySensorDescription(
+        key="radio_problem",
+        translation_key="radio_problem",
+        name="Radio problem",
+        icon="mdi:radio-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=_radio_problem,
+    ),
     PyMCBinarySensorDescription(
         key="mqtt_handler_active",
         translation_key="mqtt_handler_active",
@@ -214,7 +224,7 @@ class PyMCBinarySensorEntity(PyMCBaseEntity, BinarySensorEntity):
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{description.key}"
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self.coordinator.data)
 
 

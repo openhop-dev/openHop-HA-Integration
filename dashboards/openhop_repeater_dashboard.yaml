@@ -20,6 +20,8 @@
 # Repeater's device/child devices. Radio children have independent prefixes.
 # Remove unsupported rows/cards; never borrow another Repeater's readings.
 # Plugin-manager counts are unknown on older builds or if the manager is down.
+# Aggregate radio health belongs to the parent, not configured radio children.
+# Radio status is unknown on older builds; radio_error is presence only, not text.
 # Replace these example rows with broker entities from your installation.
 # Replace these example rows with companion entities from your installation.
 # Ordered full-width bands require a current Home Assistant Sections frontend.
@@ -28,6 +30,9 @@ path: example-openhop-repeater
 icon: mdi:radio-tower
 type: sections
 badges:
+- entity: binary_sensor.REPEATER_SLUG_radio_problem
+  name: Radio
+  show_name: true
 - entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
   name: MQTT
   show_name: true
@@ -90,6 +95,17 @@ sections:
     card:
       type: markdown
       content: '**Attention:** Hardware statistics unavailable. See diagnostics below.'
+    grid_options:
+      columns: full
+      rows: auto
+  - type: conditional
+    conditions:
+    - condition: state
+      entity: binary_sensor.REPEATER_SLUG_radio_problem
+      state: 'on'
+    card:
+      type: markdown
+      content: '**Attention:** Aggregate radio is degraded, disabled, or reporting an error. API connectivity does not prove RF operation. See radio status below; use local Repeater logs for error details.'
     grid_options:
       columns: full
       rows: auto
@@ -449,6 +465,10 @@ sections:
         name: API connected
       - entity: sensor.REPEATER_SLUG_component_api_last_success
         name: API last success
+      - entity: sensor.REPEATER_SLUG_radio_status
+        name: Aggregate radio status
+      - entity: binary_sensor.REPEATER_SLUG_radio_problem
+        name: Aggregate radio problem
       - entity: binary_sensor.REPEATER_SLUG_component_stats_problem
         name: Stats problem
       - entity: binary_sensor.REPEATER_SLUG_component_mqtt_status_problem

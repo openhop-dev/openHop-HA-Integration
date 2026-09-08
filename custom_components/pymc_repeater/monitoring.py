@@ -39,9 +39,16 @@ def reading_age(reading: dict, *, now: float | None = None) -> float | None:
 
 
 def reading_stale(reading: dict, interval: Any, *, now: float | None = None) -> bool | None:
-    """Allow three source polling intervals, with a 60-second minimum."""
+    """Allow three source intervals, with a 60-second minimum.
+
+    The reading envelope's poll_interval_seconds is the backend scheduler's
+    effective cadence, including plugin defaults/overrides. ``interval`` is
+    only the legacy global-summary fallback when that metadata is absent;
+    it cannot establish a legacy plugin's actual cadence. Present but invalid
+    metadata is unknown, not permission to substitute the global interval.
+    """
     age = reading_age(reading, now=now)
-    cadence = finite_number(interval)
+    cadence = finite_number(reading.get("poll_interval_seconds", interval))
     if age is None or cadence is None or cadence <= 0:
         return None
     return age > max(60, cadence * 3)
@@ -170,8 +177,11 @@ def radio_inventory(data: dict, aliases: Any = _NO_RADIO_ALIASES) -> dict[str, d
             continue
         seen_rows.add(rid)
         result.setdefault(rid, {})
-        if isinstance(row.get("type"), str):
-            result[rid]["type"] = row["type"]
+        radio_type = row.get("radio_type")
+        if not isinstance(radio_type, str):
+            radio_type = row.get("type")
+        if isinstance(radio_type, str):
+            result[rid]["type"] = radio_type
         settings = row.get("radio")
         if isinstance(settings, dict):
             for field in RADIO_FIELDS:
@@ -179,11 +189,27 @@ def radio_inventory(data: dict, aliases: Any = _NO_RADIO_ALIASES) -> dict[str, d
                 if value is not None:
                     result[rid][field] = value
     # Legacy single-radio configuration is global, but belongs only to the
-    # explicitly named default. Never copy global configuration across a fabric.
+    # explicitly named sole default, including a single physical radio wrapped
+    # by the fabric. Validate raw topology before normalization hides bad rows.
     default = stack.get("default_radio")
     config = stats.get("config")
-    if (stack.get("mode") == "single" and len(result) == 1 and isinstance(default, str) and default in result
-            and isinstance(config, dict) and not config.get("error")):
+    fallback_rows = stats.get("radios", [])
+    valid_rows = isinstance(fallback_rows, list) and all(
+        isinstance(row, dict)
+        and row.get("id", row.get("radio_id")) == default
+        and ("radio_id" not in row or row["radio_id"] == default)
+        and not row.get("error") and row.get("success") is not False
+        and isinstance(row.get("radio", {}), dict)
+        and not row.get("radio", {}).get("error")
+        and row.get("radio", {}).get("success") is not False
+        for row in fallback_rows
+    )
+    if (stack.get("mode") in ("single", "single_fabric")
+            and isinstance(default, str) and default and default.isprintable()
+            and not any(char.isspace() for char in default)
+            and ids == [default] and set(result) == {default} and not ambiguous
+            and valid_rows and not stack.get("error") and stack.get("success") is not False
+            and isinstance(config, dict) and not config.get("error") and config.get("success") is not False):
         settings = config.get("radio")
         if isinstance(settings, dict):
             for field in RADIO_FIELDS:

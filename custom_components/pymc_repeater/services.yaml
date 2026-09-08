@@ -11,6 +11,7 @@ ping_neighbor:
       selector:
         text:
     timeout:
+      description: Remote reply wait in seconds (1–60). HTTP allows 6 additional seconds.
       default: 10
       selector:
         number:
@@ -166,7 +167,7 @@ cad_calibration_stop:
 
 cad_manual_check:
   name: Run manual CAD check
-  description: Run immediate CAD checks and return detection diagnostics.
+  description: Run immediate CAD checks and return detection diagnostics. The HTTP budget scales with samples and CAD timeout, up to 167 seconds.
   fields:
     config_entry_id:
       selector:
@@ -364,7 +365,7 @@ companion_login:
 
 companion_request_status:
   name: Companion request status
-  description: Request status from a remote companion target.
+  description: Request status from a remote companion target. Optionally set response_variable to receive the backend result dictionary (non-dictionary results are wrapped under result). Existing calls without a response remain supported.
   fields:
     config_entry_id:
       selector:
@@ -375,6 +376,7 @@ companion_request_status:
       selector:
         text:
     timeout:
+      description: Remote reply wait in seconds (1–120). HTTP allows 10 additional seconds.
       default: 15
       selector:
         number:
@@ -387,7 +389,7 @@ companion_request_status:
 
 companion_request_telemetry:
   name: Companion request telemetry
-  description: Request telemetry from a remote companion target.
+  description: Request telemetry from a remote companion target. Optionally set response_variable to receive the backend result dictionary (non-dictionary results are wrapped under result). Existing calls without a response remain supported.
   fields:
     config_entry_id:
       selector:
@@ -398,6 +400,7 @@ companion_request_telemetry:
       selector:
         text:
     timeout:
+      description: Remote reply wait in seconds (1–120). HTTP allows 10 additional seconds.
       default: 20
       selector:
         number:

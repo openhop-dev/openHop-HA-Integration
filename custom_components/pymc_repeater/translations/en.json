@@ -51,6 +51,10 @@
   },
   "entity": {
     "sensor": {
+      "radio_status": {
+        "name": "Radio status",
+        "state": {"ok": "OK", "degraded": "Degraded", "disabled": "Disabled"}
+      },
       "recv_flood_count": {"name": "Flood packets received"},
       "recv_direct_count": {"name": "Direct packets received"},
       "sent_flood_count": {"name": "Flood packets transmitted"},
@@ -142,6 +146,7 @@
       }
     },
     "binary_sensor": {
+      "radio_problem": {"name": "Radio problem"},
       "mqtt_handler_active": {
         "name": "MQTT handler active"
       },

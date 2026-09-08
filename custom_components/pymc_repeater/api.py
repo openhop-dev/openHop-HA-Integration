@@ -700,10 +700,14 @@ class PyMCRepeaterApiClient:
 
     async def async_ping_neighbor(self, target_id: str, timeout: int = 10) -> Any:
         """Ping a neighbor."""
+        if not 1 <= timeout <= 60:
+            raise PyMCRepeaterApiError("Ping timeout must be between 1 and 60 seconds")
         return await self._async_request_wrapped(
             "POST",
             "/api/ping_neighbor",
             json_body={"target_id": target_id, "timeout": timeout},
+            # Backend waits timeout + 1; allow another 5 seconds for HTTP.
+            timeout_seconds=timeout + 6,
         )
 
     async def async_room_post_message(
@@ -790,7 +794,13 @@ class PyMCRepeaterApiClient:
         if cad_symbol_num is not None:
             payload["cad_symbol_num"] = cad_symbol_num
         return await self._async_request_wrapped(
-            "POST", "/api/cad_manual_check", json_body=payload
+            "POST", "/api/cad_manual_check", json_body=payload,
+            # Mirror backend-clamped sample/time bounds and its 2-second margin,
+            # then allow 5 seconds for HTTP. Calibration start is asynchronous.
+            timeout_seconds=max(
+                REQUEST_TIMEOUT,
+                min(32, max(1, samples)) * min(5000, max(50, cad_timeout_ms)) / 1000 + 7,
+            ),
         )
 
     async def async_save_cad_settings(
@@ -855,9 +865,14 @@ class PyMCRepeaterApiClient:
         payload: dict[str, Any] = {"pub_key": pub_key, "text": text, "txt_type": txt_type}
         if companion_name:
             payload["companion_name"] = companion_name
-        return await self._async_request_wrapped(
-            "POST", "/api/companion/send_text", json_body=payload
+        result = await self._async_request_wrapped(
+            "POST", "/api/companion/send_text", json_body=payload,
+            # Companion _run_async defaults to 30 seconds, plus HTTP margin.
+            timeout_seconds=35,
         )
+        if isinstance(result, dict) and result.get("sent") is False:
+            raise PyMCRepeaterApiError("Companion did not send the message")
+        return result
 
     async def async_companion_send_channel_message(
         self,
@@ -870,9 +885,14 @@ class PyMCRepeaterApiClient:
         payload: dict[str, Any] = {"channel_idx": channel_idx, "text": text}
         if companion_name:
             payload["companion_name"] = companion_name
-        return await self._async_request_wrapped(
-            "POST", "/api/companion/send_channel_message", json_body=payload
+        result = await self._async_request_wrapped(
+            "POST", "/api/companion/send_channel_message", json_body=payload,
+            # Companion _run_async defaults to 30 seconds, plus HTTP margin.
+            timeout_seconds=35,
         )
+        if isinstance(result, dict) and result.get("sent") is False:
+            raise PyMCRepeaterApiError("Companion did not send the message")
+        return result
 
     async def async_companion_login(
         self,
@@ -886,7 +906,9 @@ class PyMCRepeaterApiClient:
         if companion_name:
             payload["companion_name"] = companion_name
         return await self._async_request_wrapped(
-            "POST", "/api/companion/login", json_body=payload
+            "POST", "/api/companion/login", json_body=payload,
+            # Backend login waits up to 15 seconds.
+            timeout_seconds=20,
         )
 
     async def async_companion_request_status(
@@ -897,11 +919,15 @@ class PyMCRepeaterApiClient:
         companion_name: str | None = None,
     ) -> Any:
         """Request status from a companion target."""
+        if not 1 <= timeout <= 120:
+            raise PyMCRepeaterApiError("Companion timeout must be between 1 and 120 seconds")
         payload: dict[str, Any] = {"pub_key": pub_key, "timeout": timeout}
         if companion_name:
             payload["companion_name"] = companion_name
         return await self._async_request_wrapped(
-            "POST", "/api/companion/request_status", json_body=payload
+            "POST", "/api/companion/request_status", json_body=payload,
+            # Backend waits timeout + 5; add 5 seconds for HTTP.
+            timeout_seconds=timeout + 10,
         )
 
     async def async_companion_request_telemetry(
@@ -915,6 +941,8 @@ class PyMCRepeaterApiClient:
         want_environment: bool = True,
     ) -> Any:
         """Request telemetry from a companion target."""
+        if not 1 <= timeout <= 120:
+            raise PyMCRepeaterApiError("Companion timeout must be between 1 and 120 seconds")
         payload: dict[str, Any] = {
             "pub_key": pub_key,
             "timeout": timeout,
@@ -925,7 +953,9 @@ class PyMCRepeaterApiClient:
         if companion_name:
             payload["companion_name"] = companion_name
         return await self._async_request_wrapped(
-            "POST", "/api/companion/request_telemetry", json_body=payload
+            "POST", "/api/companion/request_telemetry", json_body=payload,
+            # Backend waits timeout + 5; add 5 seconds for HTTP.
+            timeout_seconds=timeout + 10,
         )
 
     async def async_companion_send_command(
@@ -943,7 +973,9 @@ class PyMCRepeaterApiClient:
         if companion_name:
             payload["companion_name"] = companion_name
         return await self._async_request_wrapped(
-            "POST", "/api/companion/send_command", json_body=payload
+            "POST", "/api/companion/send_command", json_body=payload,
+            # Backend command waits up to 20 seconds.
+            timeout_seconds=25,
         )
 
     async def async_companion_reset_path(
