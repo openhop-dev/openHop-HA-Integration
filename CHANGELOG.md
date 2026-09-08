@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.2.1
+
+- fixed the GPS stream listener blocking Home Assistant startup wrap-up by using a config-entry background task, as reported in [#16](https://github.com/openhop-dev/openHop-HA-Integration/issues/16)
+
 ## 1.2.0
 
 - added aggregate parent radio status and problem entities with a boolean or unknown radio error attribute without exposing raw error text or inferring per-radio health from api connectivity

@@ -70,8 +70,27 @@ class HourlyUpdateCheckTests(unittest.IsolatedAsyncioTestCase):
         async def fetch_all():
             return {'update_status': {'state': 'checking'}}
         api.async_fetch_all = fetch_all
-        self.hass = SimpleNamespace(async_create_task=create_task)
-        entry = SimpleNamespace(options={}, entry_id='test', async_on_unload=self.unload_callbacks.append)
+        self.tracked_tasks = []
+        self.background_tasks = []
+
+        def tracked_task(coro):
+            task = create_task(coro)
+            self.tracked_tasks.append(task)
+            return task
+
+        def background_task(hass, coro, name):
+            self.assertIs(hass, self.hass)
+            task = create_task(coro)
+            task.set_name(name)
+            self.background_tasks.append(task)
+            return task
+
+        self.hass = SimpleNamespace(async_create_task=tracked_task)
+        entry = SimpleNamespace(
+            options={}, entry_id='test',
+            async_on_unload=self.unload_callbacks.append,
+            async_create_background_task=background_task,
+        )
         ns.update(DataUpdateCoordinator=FakeCoordinator, asyncio=asyncio,
                   contextlib=contextlib, datetime=datetime, timedelta=timedelta,
                   timezone=timezone, json=json, _LOGGER=logging.getLogger('hourly_test'),
@@ -116,6 +135,25 @@ class HourlyUpdateCheckTests(unittest.IsolatedAsyncioTestCase):
         imports = ast.parse((COMPONENT / 'coordinator.py').read_text())
         self.assertTrue(any(isinstance(n, ast.ImportFrom) and n.module == 'homeassistant.helpers.event'
                             and any(a.name == 'async_track_time_change' for a in n.names) for n in imports.body))
+
+    async def test_gps_listener_is_background_work_and_stops_before_restart(self):
+        """Issue #16: a persistent GPS listener must not enter startup work."""
+        await self.start()
+        await self.coordinator.async_start_runtime()
+        await asyncio.sleep(0)
+        task = self.coordinator._gps_stream_task
+        self.assertFalse(task.done())
+        self.assertEqual(self.tracked_tasks, [])
+        self.assertEqual(self.background_tasks, [task])
+        self.assertEqual(task.get_name(), 'pymc_repeater_gps_stream')
+        await self.coordinator.async_stop_runtime()
+        self.assertTrue(task.cancelled())
+        self.assertIsNone(self.coordinator._gps_stream_task)
+        await self.coordinator.async_stop_runtime()
+        await self.start()
+        self.assertIsNot(self.coordinator._gps_stream_task, task)
+        self.assertEqual(len(self.background_tasks), 2)
+        self.assertEqual(self.tracked_tasks, [])
 
     async def test_hourly_check_is_not_forced_then_refreshes_cached_status(self):
         action = await self.start()
