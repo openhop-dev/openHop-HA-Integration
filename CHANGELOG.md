@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- fixed single-radio settings discovery to read the actual nested stats configuration, restoring frequency, bandwidth, TX power, spreading factor, coding rate, and preamble entities
+
 - added stable radio child inventory and supported read-only radio settings without allocating aggregate RF metrics; the installed API does not establish genuine per-radio telemetry
 - derive charging/discharging/neutral battery trend only from fresh finite signed solar charge rate; zero does not claim a full battery
 - added shared-poll component diagnostics, last successful poll, source age/stale sensors and conservative measurement availability

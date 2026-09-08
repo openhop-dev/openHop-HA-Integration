@@ -38,8 +38,8 @@ class MonitoringTests(unittest.TestCase):
     def test_radio_fields_and_single_default_fallback(self):
         fields = {'frequency': 915000000, 'bandwidth': 125000, 'tx_power': 20,
                   'spreading_factor': 7, 'coding_rate': 5, 'preamble_length': 8}
-        data = {'stats': {'radio_stack': {'mode': 'single', 'radio_ids': ['a'], 'default_radio': 'a'}, 'radios': []},
-                'config': {'radio': dict(fields, secret='excluded')}}
+        data = {'stats': {'radio_stack': {'mode': 'single', 'radio_ids': ['a'], 'default_radio': 'a'}, 'radios': [],
+                          'config': {'radio': dict(fields, secret='excluded')}}}
         radio = self.m.radio_inventory(data)['a']
         for key, value in fields.items():
             self.assertEqual(radio[key], value)

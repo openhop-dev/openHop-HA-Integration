@@ -109,7 +109,7 @@ def radio_inventory(data: dict) -> dict[str, dict]:
     # Legacy single-radio configuration is global, but belongs only to the
     # explicitly named default. Never copy global configuration across a fabric.
     default = stack.get("default_radio")
-    config = data.get("config")
+    config = stats.get("config")
     if (stack.get("mode") == "single" and len(result) == 1 and isinstance(default, str) and default in result
             and isinstance(config, dict) and not config.get("error")):
         settings = config.get("radio")
