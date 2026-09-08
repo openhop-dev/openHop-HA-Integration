@@ -8,111 +8,413 @@
 # 4. Optionally change the title and path below.
 #
 # Dynamic MQTT broker, companion, and external-sensor entities vary by install.
-# Replace the clearly marked example broker/companion rows with entities that
-# exist in your instance. If your external sensor is not named `modem`, replace
-# `_sensor_modem_` in those rows with the actual sensor slug shown by HA.
+# Home Assistant can give dynamic entities area prefixes or numeric suffixes,
+# so they cannot always be derived from REPEATER_SLUG. Replace the clearly
+# marked example rows with the complete active entity IDs from your instance.
+# The modem percentage card below searches active entities and tolerates those
+# area prefixes or numeric suffixes. If the sensor is not named `modem`, replace
+# `_sensor_modem_` in its two template match strings with the actual sensor slug.
 #
 # This template uses only built-in Home Assistant cards.
-
+# Replace ALL dynamic example rows below with exact entity IDs from this
+# Repeater's device/child devices. Radio children have independent prefixes.
+# Remove unsupported rows/cards; never borrow another Repeater's readings.
+# Plugin-manager counts are unknown on older builds or if the manager is down.
+# Aggregate radio health belongs to the parent, not configured radio children.
+# Radio status is unknown on older builds; radio_error is presence only, not text.
+# Replace these example rows with broker entities from your installation.
+# Replace these example rows with companion entities from your installation.
+# Ordered full-width bands require a current Home Assistant Sections frontend.
 title: Example openHop Repeater
 path: example-openhop-repeater
 icon: mdi:radio-tower
-type: masonry
+type: sections
 badges:
-  - entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
-    name: MQTT
-  - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
-    name: MQTT Handler
-  - entity: binary_sensor.REPEATER_SLUG_gps_fix_valid
-    name: GPS Fix
-  - entity: binary_sensor.REPEATER_SLUG_update_available
-    name: Update
-  - entity: sensor.REPEATER_SLUG_repeater_version
-    name: Version
-  - entity: select.REPEATER_SLUG_repeater_mode
-    name: Mode
-cards:
-  - type: grid
-    title: Repeater Overview
-    columns: 3
-    square: false
+- entity: binary_sensor.REPEATER_SLUG_radio_problem
+  name: Radio
+  show_name: true
+- entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
+  name: MQTT
+  show_name: true
+- type: entity
+  entity: binary_sensor.REPEATER_SLUG_component_api_connected
+  name: API
+  show_name: true
+- entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
+  name: MQTT handler
+  show_name: true
+- entity: binary_sensor.REPEATER_SLUG_update_available
+  name: Update
+  show_name: true
+- entity: sensor.REPEATER_SLUG_repeater_version
+  name: Firmware
+  show_name: true
+- entity: select.REPEATER_SLUG_repeater_mode
+  name: Mode
+  show_name: true
+show_icon_and_title: true
+max_columns: 3
+dense_section_placement: false
+sections:
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Live overview
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+  - type: conditional
+    conditions:
+    - condition: state
+      entity: binary_sensor.REPEATER_SLUG_component_api_connected
+      state: 'off'
+    card:
+      type: markdown
+      content: '**Attention:** Repeater API disconnected. See diagnostics below.'
+    grid_options:
+      columns: full
+      rows: auto
+  - type: conditional
+    conditions:
+    - condition: state
+      entity: binary_sensor.REPEATER_SLUG_component_stats_problem
+      state: 'on'
+    card:
+      type: markdown
+      content: '**Attention:** Packet statistics unavailable. See diagnostics below.'
+    grid_options:
+      columns: full
+      rows: auto
+  - type: conditional
+    conditions:
+    - condition: state
+      entity: binary_sensor.REPEATER_SLUG_component_hardware_stats_problem
+      state: 'on'
+    card:
+      type: markdown
+      content: '**Attention:** Hardware statistics unavailable. See diagnostics below.'
+    grid_options:
+      columns: full
+      rows: auto
+  - type: conditional
+    conditions:
+    - condition: state
+      entity: binary_sensor.REPEATER_SLUG_radio_problem
+      state: 'on'
+    card:
+      type: markdown
+      content: '**Attention:** Aggregate radio is degraded, disabled, or reporting an error. API connectivity does not prove RF operation. See radio status below; use local Repeater logs for error details.'
+    grid_options:
+      columns: full
+      rows: auto
+  - type: tile
+    entity: sensor.REPEATER_SLUG_packets_received_per_hour
+    name: Received / h
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: tile
+    entity: sensor.REPEATER_SLUG_packets_forwarded_per_hour
+    name: Forwarded / h
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: tile
+    entity: sensor.REPEATER_SLUG_packet_drop_rate_24h
+    name: Drops · 24 h
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: tile
+    entity: sensor.REPEATER_SLUG_current_noise_floor
+    name: Noise floor
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: tile
+    entity: sensor.REPEATER_SLUG_radio_utilization
+    name: Radio use
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: tile
+    entity: sensor.REPEATER_SLUG_cpu_usage
+    name: CPU use
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: tile
+    entity: sensor.REPEATER_SLUG_sensor_modem_die_temperature_c
+    name: Modem temperature
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 6
+      rows: 1
+  - type: vertical-stack
     cards:
-      - type: entity
-        entity: sensor.REPEATER_SLUG_current_airtime
-        name: Current Airtime
-        icon: mdi:radio-tower
-      - type: entity
-        entity: sensor.REPEATER_SLUG_radio_utilization
-        name: Radio Utilization
+    - type: markdown
+      title: External Modem Percentages
+      card_size: 2
+      content: |
+        {% set ns = namespace(battery=none, battery_unit='%', solar=none, solar_unit='%/h') %}
+        {% for item in states.sensor %}
+          {% if 'REPEATER_SLUG_sensor_modem_battery_percent' in item.entity_id and item.state not in ['unknown', 'unavailable'] %}
+            {% set ns.battery = item.state %}
+            {% set ns.battery_unit = item.attributes.get('unit_of_measurement', '%') %}
+          {% endif %}
+          {% if 'REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour' in item.entity_id and item.state not in ['unknown', 'unavailable'] %}
+            {% set ns.solar = item.state %}
+            {% set ns.solar_unit = item.attributes.get('unit_of_measurement', '%/h') %}
+          {% endif %}
+        {% endfor %}
+        **Battery:** {% if ns.battery is not none %}{{ ns.battery }} {{ ns.battery_unit }}{% else %}Not reported{% endif %}
+
+        **Solar charge rate:** {% if ns.solar is not none %}{{ ns.solar }} {{ ns.solar_unit }}{% else %}Not reported{% endif %}
+    grid_options:
+      columns: 12
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Recent trends
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: sensor
+      entity: sensor.REPEATER_SLUG_packets_received_per_hour
+      name: Received / h · 6 h
+      graph: line
+      hours_to_show: 6
+      detail: 1
+      height: 100
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: sensor
+      entity: sensor.REPEATER_SLUG_packets_forwarded_per_hour
+      name: Forwarded / h · 6 h
+      graph: line
+      hours_to_show: 6
+      detail: 1
+      height: 100
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: sensor
+      entity: sensor.REPEATER_SLUG_current_noise_floor
+      name: Noise floor · 6 h
+      graph: line
+      hours_to_show: 6
+      detail: 1
+      height: 100
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Operations
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      title: Software update
+      content: |
+        {% set status = states('sensor.REPEATER_SLUG_update_state') %}
+        {% set error = state_attr('sensor.REPEATER_SLUG_update_state', 'error') or '' %}
+        {% set checked = state_attr('sensor.REPEATER_SLUG_update_state', 'last_checked') %}
+        {% set update = states('update.REPEATER_SLUG_repeater_software') %}
+        {% if is_state('binary_sensor.REPEATER_SLUG_component_api_connected', 'off') %}
+        Repeater disconnected
+        {% elif status == 'installing' %}
+        Installing
+        {% elif status == 'checking' %}
+        Checking
+        {% elif 'github' in (error | lower) and 'rate limit' in (error | lower) %}
+        GitHub Limited
+        {% elif error or status == 'error' %}
+        Check failed
+        {% elif not checked %}
+        Not checked
+        {% elif update == 'on' %}
+        Update available
+        {% elif update == 'off' %}
+        Up to date
+        {% else %}
+        Status unavailable
+        {% endif %}
+    - type: entities
+      title: Update Management
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: binary_sensor.REPEATER_SLUG_update_available
+        name: Update Available
+        icon: mdi:update
+      - entity: sensor.REPEATER_SLUG_repeater_version
+        name: Installed Version
+        icon: mdi:tag
+      - entity: sensor.REPEATER_SLUG_update_latest_version
+        name: Latest Version
+        icon: mdi:tag-plus
+      - entity: sensor.REPEATER_SLUG_update_state
+        name: Update State
+        icon: mdi:progress-download
+      - entity: sensor.REPEATER_SLUG_update_channel
+        name: Current Update Channel
+        icon: mdi:source-branch
+      - entity: select.REPEATER_SLUG_update_channel
+        name: Set Update Channel
+        icon: mdi:source-branch
+      - entity: button.REPEATER_SLUG_check_for_updates
+        name: Check For Updates
+        icon: mdi:cloud-search
+      - entity: button.REPEATER_SLUG_install_latest_update
+        name: Install Latest Update
+        icon: mdi:download-circle
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Repeater Controls
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: select.REPEATER_SLUG_repeater_mode
+        name: Repeater Mode
+        icon: mdi:tune
+      - entity: sensor.REPEATER_SLUG_default_region
+        name: Current Default Region
+        icon: mdi:earth
+      - entity: select.REPEATER_SLUG_default_region
+        name: Set Default Region
+        icon: mdi:earth-arrow-right
+      - entity: switch.REPEATER_SLUG_duty_cycle_enforcement
+        name: Duty Cycle Enforcement
+        icon: mdi:shield-check
+      - entity: number.REPEATER_SLUG_max_airtime_percent
+        name: Max Airtime %
+        icon: mdi:percent
+      - entity: button.REPEATER_SLUG_send_advert
+        name: Send Flood Advert
+        icon: mdi:bullhorn
+      - entity: button.REPEATER_SLUG_send_direct_advert
+        name: Send Direct Advert
+        icon: mdi:bullhorn-outline
+      - entity: number.REPEATER_SLUG_flood_advert_interval
+        name: Flood Advert Interval
+        icon: mdi:timer-sync-outline
+      - entity: number.REPEATER_SLUG_direct_advert_interval
+        name: Direct Advert Interval
+        icon: mdi:timer-outline
+      - entity: button.REPEATER_SLUG_restart_repeater_service
+        name: Restart Repeater Service
+        icon: mdi:restart-alert
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Routing
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_route_direct
+        name: Direct Routes
+        icon: mdi:routes
+      - entity: sensor.REPEATER_SLUG_route_flood
+        name: Flood Routes
+        icon: mdi:waves-arrow-right
+      - entity: switch.REPEATER_SLUG_allow_unscoped_flood
+        name: Allow Unscoped Flood
+        icon: mdi:flood
+    - type: entities
+      title: Neighbor Links
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_observed_neighbor_links
+        name: Observed Neighbor Links
         icon: mdi:access-point-network
-      - type: entity
-        entity: sensor.REPEATER_SLUG_current_noise_floor
-        name: Noise Floor
-        icon: mdi:waves
-      - type: entity
-        entity: sensor.REPEATER_SLUG_packets_24h
-        name: Packets 24h
-        icon: mdi:package-variant
-      - type: entity
-        entity: sensor.REPEATER_SLUG_packet_drop_rate_24h
-        name: Drop Rate 24h
-        icon: mdi:packet-filter
-      - type: entity
-        entity: sensor.REPEATER_SLUG_average_score_24h
-        name: Avg Score 24h
-        icon: mdi:signal
-
-  - type: horizontal-stack
+      - entity: sensor.REPEATER_SLUG_active_neighbor_links
+        name: Active Neighbor Links
+        icon: mdi:access-point-network-off
+      - entity: sensor.REPEATER_SLUG_mqtt_neighbors_phase
+        name: MQTT Neighbors Phase
+        icon: mdi:access-point-network
+      - entity: button.REPEATER_SLUG_publish_mqtt_neighbors
+        name: Publish MQTT Neighbors
+        icon: mdi:cloud-upload-outline
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Diagnostics · system & radio
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
     cards:
-      - type: gauge
-        entity: sensor.REPEATER_SLUG_current_airtime
-        name: Airtime
-        min: 0
-        max: 100
-        severity:
-          green: 0
-          yellow: 50
-          red: 80
-      - type: gauge
-        entity: sensor.REPEATER_SLUG_radio_utilization
-        name: Radio Use
-        min: 0
-        max: 100
-        severity:
-          green: 0
-          yellow: 60
-          red: 85
-      - type: gauge
-        entity: sensor.REPEATER_SLUG_packet_drop_rate_24h
-        name: Drops
-        min: 0
-        max: 100
-        severity:
-          green: 0
-          yellow: 5
-          red: 15
-
-  - type: history-graph
-    title: Radio Health
-    hours_to_show: 24
-    refresh_interval: 60
-    entities:
-      - entity: sensor.REPEATER_SLUG_current_airtime
-        name: Airtime
-      - entity: sensor.REPEATER_SLUG_radio_utilization
-        name: Utilization
-      - entity: sensor.REPEATER_SLUG_current_noise_floor
-        name: Noise Floor
-      - entity: sensor.REPEATER_SLUG_average_rssi_24h
-        name: Avg RSSI
-      - entity: sensor.REPEATER_SLUG_average_snr_24h
-        name: Avg SNR
-
-  - type: entities
-    title: System Health
-    state_color: true
-    show_header_toggle: false
-    entities:
+    - type: entities
+      title: System Health
+      state_color: true
+      show_header_toggle: false
+      entities:
       - entity: binary_sensor.REPEATER_SLUG_sensor_system_health_ok
         name: System Health OK
         icon: mdi:heart-pulse
@@ -134,6 +436,12 @@ cards:
       - entity: sensor.REPEATER_SLUG_total_processes
         name: Total Processes
         icon: mdi:application-cog-outline
+      - entity: sensor.REPEATER_SLUG_radio_stack_mode
+        name: Radio Stack Mode
+        icon: mdi:radio-tower
+      - entity: sensor.REPEATER_SLUG_configured_radio_count
+        name: Configured Radio Count
+        icon: mdi:counter
       - type: divider
       - entity: sensor.REPEATER_SLUG_external_sensors_loaded
         name: External Sensors Loaded
@@ -141,29 +449,98 @@ cards:
       - entity: sensor.REPEATER_SLUG_external_sensor_readings_ok
         name: External Sensor Readings OK
         icon: mdi:check-network-outline
-
-  - type: entities
-    title: Network Traffic
-    show_header_toggle: false
-    entities:
-      - entity: sensor.REPEATER_SLUG_network_bytes_received
-        name: Bytes Received
-        icon: mdi:download-network-outline
-      - entity: sensor.REPEATER_SLUG_network_bytes_sent
-        name: Bytes Sent
-        icon: mdi:upload-network-outline
-      - entity: sensor.REPEATER_SLUG_network_packets_received
-        name: Network Packets Received
-        icon: mdi:download-network
-      - entity: sensor.REPEATER_SLUG_network_packets_sent
-        name: Network Packets Sent
-        icon: mdi:upload-network
-
-  - type: entities
-    title: Packet Flow
-    state_color: true
-    show_header_toggle: false
-    entities:
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Component Health
+      show_header_toggle: false
+      entities:
+      - entity: binary_sensor.REPEATER_SLUG_component_api_connected
+        name: API connected
+      - entity: sensor.REPEATER_SLUG_component_api_last_success
+        name: API last success
+      - entity: sensor.REPEATER_SLUG_radio_status
+        name: Aggregate radio status
+      - entity: binary_sensor.REPEATER_SLUG_radio_problem
+        name: Aggregate radio problem
+      - entity: binary_sensor.REPEATER_SLUG_component_stats_problem
+        name: Stats problem
+      - entity: binary_sensor.REPEATER_SLUG_component_mqtt_status_problem
+        name: MQTT status problem
+      - entity: binary_sensor.REPEATER_SLUG_component_hardware_stats_problem
+        name: Hardware problem
+      - entity: binary_sensor.REPEATER_SLUG_component_gps_problem
+        name: GPS problem
+      - entity: binary_sensor.REPEATER_SLUG_component_plugin_summary_problem
+        name: Plugin summary problem
+      - entity: binary_sensor.REPEATER_SLUG_component_update_status_problem
+        name: Update status problem
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Radio Inventory and Settings
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_radio_example_inventory
+        name: Inventory
+      - entity: sensor.REPEATER_SLUG_radio_example_frequency
+        name: Frequency
+      - entity: sensor.REPEATER_SLUG_radio_example_tx_power
+        name: Tx power
+      - entity: sensor.REPEATER_SLUG_radio_example_bandwidth
+        name: Bandwidth
+      - entity: sensor.REPEATER_SLUG_radio_example_spreading_factor
+        name: Spreading factor
+      - entity: sensor.REPEATER_SLUG_radio_example_coding_rate
+        name: Coding rate
+      - entity: sensor.REPEATER_SLUG_radio_example_preamble_length
+        name: Preamble length
+    - type: entities
+      title: Source Freshness
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_reading_system_health_hardware_stats_age
+        name: Hardware age
+      - entity: binary_sensor.REPEATER_SLUG_reading_system_health_hardware_stats_stale
+        name: Hardware stale
+      - entity: sensor.REPEATER_SLUG_reading_modem_pymc_modem_age
+        name: Modem age
+      - entity: binary_sensor.REPEATER_SLUG_reading_modem_pymc_modem_stale
+        name: Modem stale
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Diagnostics · traffic & routing
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Packet Flow
+      state_color: true
+      show_header_toggle: false
+      entities:
       - entity: sensor.REPEATER_SLUG_packets_24h
         name: Packets Received 24h
         icon: mdi:download-network
@@ -185,47 +562,37 @@ cards:
       - entity: sensor.REPEATER_SLUG_packet_types_24h
         name: Packet Types 24h
         icon: mdi:format-list-bulleted-type
-
-  - type: history-graph
-    title: Packet Trends
-    hours_to_show: 24
-    refresh_interval: 60
-    entities:
-      - entity: sensor.REPEATER_SLUG_packets_received_per_hour
-        name: RX / Hour
-      - entity: sensor.REPEATER_SLUG_packets_forwarded_per_hour
-        name: Forwarded / Hour
-      - entity: sensor.REPEATER_SLUG_dropped_packets_24h
-        name: Dropped 24h
-      - entity: sensor.REPEATER_SLUG_crc_errors_24h
-        name: CRC 24h
-
-  - type: entities
-    title: Listen Before Talk Diagnostics
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: binary_sensor.REPEATER_SLUG_lbt_data_available
-        name: LBT Data Available
-        icon: mdi:database-check-outline
-      - entity: sensor.REPEATER_SLUG_lbt_transmissions_24h
-        name: LBT Transmissions 24h
-        icon: mdi:transmission-tower-export
-      - entity: sensor.REPEATER_SLUG_lbt_retry_rate_24h
-        name: LBT Retry Rate 24h
-        icon: mdi:reload-alert
-      - entity: sensor.REPEATER_SLUG_lbt_average_attempts_24h
-        name: Average Attempts 24h
-        icon: mdi:counter
-      - entity: sensor.REPEATER_SLUG_lbt_severe_contention_24h
-        name: Severe Contention 24h
-        icon: mdi:alert-octagon-outline
-
-  - type: entities
-    title: Signal Quality
-    state_color: true
-    show_header_toggle: false
-    entities:
+      - entity: sensor.REPEATER_SLUG_current_airtime
+        name: Current Airtime
+      - entity: sensor.REPEATER_SLUG_average_score_24h
+        name: Avg Score 24h
+      - type: section
+        label: Aggregate counters · since process start
+      - entity: sensor.REPEATER_SLUG_flood_packets_received
+        name: Flood packets received
+      - entity: sensor.REPEATER_SLUG_direct_packets_received
+        name: Direct packets received
+      - entity: sensor.REPEATER_SLUG_flood_packets_transmitted
+        name: Flood packets transmitted
+      - entity: sensor.REPEATER_SLUG_direct_packets_transmitted
+        name: Direct packets transmitted
+      - entity: sensor.REPEATER_SLUG_flood_duplicates
+        name: Flood duplicates
+      - entity: sensor.REPEATER_SLUG_direct_duplicates
+        name: Direct duplicates
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Signal Quality
+      state_color: true
+      show_header_toggle: false
+      entities:
       - entity: sensor.REPEATER_SLUG_average_rssi_24h
         name: Average RSSI 24h
         icon: mdi:signal
@@ -244,144 +611,155 @@ cards:
       - entity: sensor.REPEATER_SLUG_average_tx_delay_24h
         name: Average TX Delay 24h
         icon: mdi:timer-outline
-
-  - type: entities
-    title: Routing
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: sensor.REPEATER_SLUG_route_direct
-        name: Direct Routes
-        icon: mdi:routes
-      - entity: sensor.REPEATER_SLUG_route_flood
-        name: Flood Routes
-        icon: mdi:waves-arrow-right
-      - entity: switch.REPEATER_SLUG_allow_unscoped_flood
-        name: Allow Unscoped Flood
-        icon: mdi:flood
-
-  - type: entities
-    title: Neighbor Links
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: sensor.REPEATER_SLUG_observed_neighbor_links
-        name: Observed Neighbor Links
-        icon: mdi:access-point-network
-      - entity: sensor.REPEATER_SLUG_active_neighbor_links
-        name: Active Neighbor Links
-        icon: mdi:access-point-network-off
-
-  - type: entities
-    title: Repeater Controls
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: select.REPEATER_SLUG_repeater_mode
-        name: Repeater Mode
-        icon: mdi:tune
-      - entity: sensor.REPEATER_SLUG_default_region
-        name: Current Default Region
-        icon: mdi:earth
-      - entity: select.REPEATER_SLUG_default_region
-        name: Set Default Region
-        icon: mdi:earth-arrow-right
-      - entity: switch.REPEATER_SLUG_duty_cycle_enforcement
-        name: Duty Cycle Enforcement
-        icon: mdi:shield-check
-      - entity: number.REPEATER_SLUG_max_airtime_percent
-        name: Max Airtime %
-        icon: mdi:percent
-      - entity: button.REPEATER_SLUG_send_advert
-        name: Send Advert
-        icon: mdi:bullhorn
-      - entity: button.REPEATER_SLUG_restart_repeater_service
-        name: Restart Repeater Service
-        icon: mdi:restart-alert
-
-  - type: entities
-    title: Advert System
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: sensor.REPEATER_SLUG_advert_tier
-        name: Advert Tier
-        icon: mdi:stairs
-      - entity: sensor.REPEATER_SLUG_adverts_allowed
-        name: Adverts Allowed
-        icon: mdi:check-circle-outline
-      - entity: sensor.REPEATER_SLUG_adverts_dropped
-        name: Adverts Dropped
-        icon: mdi:close-circle-outline
-      - entity: sensor.REPEATER_SLUG_advert_drop_rate
-        name: Advert Drop Rate
-        icon: mdi:chart-bell-curve
-      - entity: sensor.REPEATER_SLUG_tracked_advert_hashes
-        name: Tracked Advert Hashes
-        icon: mdi:fingerprint
-      - entity: sensor.REPEATER_SLUG_tracked_advert_pubkeys
-        name: Tracked Advert Pubkeys
-        icon: mdi:key-chain
-
-  - type: entities
-    title: Advert Rate Limiting
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: switch.REPEATER_SLUG_advert_rate_limit
-        name: Rate Limit Enabled
-        icon: mdi:speedometer-slow
-      - entity: binary_sensor.REPEATER_SLUG_advert_adaptive_enabled
-        name: Adaptive Enabled
-        icon: mdi:auto-fix
-      - entity: switch.REPEATER_SLUG_advert_adaptive_control
-        name: Adaptive Control
-        icon: mdi:tune-variant
-      - entity: binary_sensor.REPEATER_SLUG_advert_dedupe_enabled
-        name: Dedupe Enabled
-        icon: mdi:content-duplicate
-      - entity: switch.REPEATER_SLUG_advert_penalty_box
-        name: Penalty Box
-        icon: mdi:account-cancel
-      - entity: number.REPEATER_SLUG_advert_minimum_interval
-        name: Minimum Interval
-      - entity: number.REPEATER_SLUG_advert_quiet_max
-        name: Quiet Max
-      - entity: number.REPEATER_SLUG_advert_normal_max
-        name: Normal Max
-      - entity: number.REPEATER_SLUG_advert_busy_max
-        name: Busy Max
-
-  - type: entities
-    title: Advert Penalty Tuning
-    show_header_toggle: false
-    entities:
-      - entity: number.REPEATER_SLUG_advert_base_penalty
-        name: Base Penalty
-      - entity: number.REPEATER_SLUG_advert_penalty_multiplier
-        name: Penalty Multiplier
-      - entity: number.REPEATER_SLUG_advert_max_penalty
-        name: Max Penalty
-      - entity: number.REPEATER_SLUG_advert_violation_threshold
-        name: Violation Threshold
-      - entity: number.REPEATER_SLUG_advert_violation_decay
-        name: Violation Decay
-      - entity: number.REPEATER_SLUG_advert_bucket_capacity
-        name: Bucket Capacity
-      - entity: number.REPEATER_SLUG_advert_refill_tokens
-        name: Refill Tokens
-      - entity: number.REPEATER_SLUG_advert_refill_interval
-        name: Refill Interval
-      - entity: number.REPEATER_SLUG_advert_ewma_alpha
-        name: EWMA Alpha
-      - entity: number.REPEATER_SLUG_advert_hysteresis
-        name: Hysteresis
-
-  - type: entities
-    title: Clients & Identities
-    state_color: true
-    show_header_toggle: false
-    entities:
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Listen Before Talk Diagnostics
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: binary_sensor.REPEATER_SLUG_lbt_data_available
+        name: LBT Data Available
+        icon: mdi:database-check-outline
+      - entity: sensor.REPEATER_SLUG_lbt_transmissions_24h
+        name: LBT Transmissions 24h
+        icon: mdi:transmission-tower-export
+      - entity: sensor.REPEATER_SLUG_lbt_retry_rate_24h
+        name: LBT Retry Rate 24h
+        icon: mdi:reload-alert
+      - entity: sensor.REPEATER_SLUG_lbt_average_attempts_24h
+        name: Average Attempts 24h
+        icon: mdi:counter
+      - entity: sensor.REPEATER_SLUG_lbt_severe_contention_24h
+        name: Severe Contention 24h
+        icon: mdi:alert-octagon-outline
+    - type: entities
+      title: Network Traffic
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_network_bytes_received
+        name: Bytes Received
+        icon: mdi:download-network-outline
+      - entity: sensor.REPEATER_SLUG_network_bytes_sent
+        name: Bytes Sent
+        icon: mdi:upload-network-outline
+      - entity: sensor.REPEATER_SLUG_network_packets_received
+        name: Network Packets Received
+        icon: mdi:download-network
+      - entity: sensor.REPEATER_SLUG_network_packets_sent
+        name: Network Packets Sent
+        icon: mdi:upload-network
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Diagnostics · plugins & connections
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: MQTT Brokers
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_connected_mqtt_brokers
+        name: Connected Brokers
+        icon: mdi:cloud-check
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
+        name: Broker Connected
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
+        name: Handler Active
+      - type: divider
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_1
+        name: Example Broker 1
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_2
+        name: Example Broker 2
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_3
+        name: Example Broker 3
+      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_4
+        name: Example Broker 4
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Companions
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_configured_companions
+        name: Configured Companions
+        icon: mdi:account-multiple
+      - entity: sensor.REPEATER_SLUG_running_companion_bridges
+        name: Running Companion Bridges
+        icon: mdi:bridge
+      - type: divider
+      - entity: binary_sensor.REPEATER_SLUG_companion_example
+        name: Example Companion
+      - entity: binary_sensor.REPEATER_SLUG_companion_bridge_example
+        name: Example Bridge
+      - entity: sensor.REPEATER_SLUG_companion_example_channels
+        name: Example Channels
+      - entity: sensor.REPEATER_SLUG_companion_example_contacts
+        name: Example Contacts
+    - type: entities
+      title: Plugin Health
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_installed_plugins
+        name: Installed plugins
+      - entity: sensor.REPEATER_SLUG_enabled_plugins
+        name: Enabled plugins
+      - entity: sensor.REPEATER_SLUG_running_plugins
+        name: Running plugins
+      - entity: sensor.REPEATER_SLUG_failed_plugins
+        name: Failed plugins
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Individual Plugins
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_plugin_example_version
+        name: example version
+      - entity: sensor.REPEATER_SLUG_plugin_example_state
+        name: example state
+      - entity: binary_sensor.REPEATER_SLUG_plugin_example_enabled
+        name: example enabled
+      - entity: binary_sensor.REPEATER_SLUG_plugin_example_running
+        name: example running
+      - entity: binary_sensor.REPEATER_SLUG_plugin_example_problem
+        name: example problem
+    - type: entities
+      title: Clients & Identities
+      state_color: true
+      show_header_toggle: false
+      entities:
       - entity: sensor.REPEATER_SLUG_authenticated_clients
         name: Authenticated Clients
         icon: mdi:account-check
@@ -397,57 +775,28 @@ cards:
       - entity: sensor.REPEATER_SLUG_room_servers
         name: Room Servers
         icon: mdi:server-network
-
-  - type: entities
-    title: MQTT Brokers
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: sensor.REPEATER_SLUG_connected_mqtt_brokers
-        name: Connected Brokers
-        icon: mdi:cloud-check
-      - entity: binary_sensor.REPEATER_SLUG_mqtt_broker_connected
-        name: Broker Connected
-      - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
-        name: Handler Active
-      - type: divider
-      # Replace these example rows with broker entities from your installation.
-      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_1
-        name: Example Broker 1
-      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_2
-        name: Example Broker 2
-      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_3
-        name: Example Broker 3
-      - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_4
-        name: Example Broker 4
-
-  - type: entities
-    title: Companions
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: sensor.REPEATER_SLUG_configured_companions
-        name: Configured Companions
-        icon: mdi:account-multiple
-      - entity: sensor.REPEATER_SLUG_running_companion_bridges
-        name: Running Companion Bridges
-        icon: mdi:bridge
-      - type: divider
-      # Replace these example rows with companion entities from your installation.
-      - entity: binary_sensor.REPEATER_SLUG_companion_example
-        name: Example Companion
-      - entity: binary_sensor.REPEATER_SLUG_companion_bridge_example
-        name: Example Bridge
-      - entity: sensor.REPEATER_SLUG_companion_example_channels
-        name: Example Channels
-      - entity: sensor.REPEATER_SLUG_companion_example_contacts
-        name: Example Contacts
-
-  - type: entities
-    title: GPS
-    state_color: true
-    show_header_toggle: false
-    entities:
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Diagnostics · GPS & external sensors
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: GPS
+      state_color: true
+      show_header_toggle: false
+      entities:
       - entity: binary_sensor.REPEATER_SLUG_gps_enabled
         name: GPS Enabled
       - entity: binary_sensor.REPEATER_SLUG_gps_running
@@ -488,63 +837,19 @@ cards:
         name: PDOP
       - entity: sensor.REPEATER_SLUG_gps_vdop
         name: VDOP
-
-  - type: entities
-    title: GPS Sync & Updates
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: binary_sensor.REPEATER_SLUG_gps_time_sync_enabled
-        name: Time Sync Enabled
-      - entity: sensor.REPEATER_SLUG_gps_time_sync_state
-        name: Time Sync State
-      - entity: sensor.REPEATER_SLUG_gps_utc_time
-        name: UTC Time
-      - entity: binary_sensor.REPEATER_SLUG_gps_location_updates_enabled
-        name: Location Updates Enabled
-      - entity: sensor.REPEATER_SLUG_gps_location_update_state
-        name: Location Update State
-      - entity: sensor.REPEATER_SLUG_gps_last_sentence_type
-        name: Last Sentence Type
-      - entity: sensor.REPEATER_SLUG_gps_valid_checksums
-        name: Valid Checksums
-
-  - type: entities
-    title: External Modem Status
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: binary_sensor.REPEATER_SLUG_sensor_modem_ok
-        name: Modem OK
-        icon: mdi:check-circle-outline
-      - entity: sensor.REPEATER_SLUG_sensor_modem_source
-        name: Source
-        icon: mdi:source-branch
-      - entity: sensor.REPEATER_SLUG_sensor_modem_url
-        name: Modem URL
-        icon: mdi:web
-      - entity: sensor.REPEATER_SLUG_sensor_modem_datetime_utc
-        name: Modem UTC Time
-        icon: mdi:clock-outline
-      - type: divider
-      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_percent
-        name: Battery
-        icon: mdi:battery
-      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_v
-        name: Battery Voltage
-        icon: mdi:flash
-      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_mv
-        name: Battery Voltage mV
-        icon: mdi:flash-outline
-      - entity: sensor.REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour
-        name: Solar Charge Rate
-        icon: mdi:solar-power
-
-  - type: entities
-    title: External Modem GPS
-    state_color: true
-    show_header_toggle: false
-    entities:
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: External Modem GPS
+      state_color: true
+      show_header_toggle: false
+      entities:
       - entity: binary_sensor.REPEATER_SLUG_sensor_modem_gps_enabled
         name: GPS Enabled
         icon: mdi:crosshairs-gps
@@ -573,41 +878,114 @@ cards:
         name: Satellites Used
       - entity: sensor.REPEATER_SLUG_sensor_modem_satellites_in_view
         name: Satellites In View
+    - type: markdown
+      title: External Modem Percentages
+      card_size: 2
+      content: |
+        {% set ns = namespace(battery=none, battery_unit='%', solar=none, solar_unit='%/h') %}
+        {% for item in states.sensor %}
+          {% if 'REPEATER_SLUG_sensor_modem_battery_percent' in item.entity_id and item.state not in ['unknown', 'unavailable'] %}
+            {% set ns.battery = item.state %}
+            {% set ns.battery_unit = item.attributes.get('unit_of_measurement', '%') %}
+          {% endif %}
+          {% if 'REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour' in item.entity_id and item.state not in ['unknown', 'unavailable'] %}
+            {% set ns.solar = item.state %}
+            {% set ns.solar_unit = item.attributes.get('unit_of_measurement', '%/h') %}
+          {% endif %}
+        {% endfor %}
+        **Battery:** {% if ns.battery is not none %}{{ ns.battery }} {{ ns.battery_unit }}{% else %}Not reported{% endif %}
 
-  - type: entities
-    title: Update Management
-    state_color: true
-    show_header_toggle: false
-    entities:
-      - entity: binary_sensor.REPEATER_SLUG_update_available
-        name: Update Available
-        icon: mdi:update
-      - entity: sensor.REPEATER_SLUG_repeater_version
-        name: Installed Version
-        icon: mdi:tag
-      - entity: sensor.REPEATER_SLUG_update_latest_version
-        name: Latest Version
-        icon: mdi:tag-plus
-      - entity: sensor.REPEATER_SLUG_update_state
-        name: Update State
-        icon: mdi:progress-download
-      - entity: sensor.REPEATER_SLUG_update_channel
-        name: Current Update Channel
+        **Solar charge rate:** {% if ns.solar is not none %}{{ ns.solar }} {{ ns.solar_unit }}{% else %}Not reported{% endif %}
+    - type: entities
+      title: Battery Trend
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_reading_modem_pymc_modem_charge_state
+        name: Modem charge state
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: External Modem Status
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: binary_sensor.REPEATER_SLUG_sensor_modem_ok
+        name: Modem OK
+        icon: mdi:check-circle-outline
+      - entity: sensor.REPEATER_SLUG_sensor_modem_source
+        name: Source
         icon: mdi:source-branch
-      - entity: select.REPEATER_SLUG_update_channel
-        name: Set Update Channel
-        icon: mdi:source-branch
-      - entity: button.REPEATER_SLUG_check_for_updates
-        name: Check For Updates
-        icon: mdi:cloud-search
-      - entity: button.REPEATER_SLUG_install_latest_update
-        name: Install Latest Update
-        icon: mdi:download-circle
-
-  - type: entities
-    title: Metrics Database
-    show_header_toggle: false
-    entities:
+      - entity: sensor.REPEATER_SLUG_sensor_modem_url
+        name: Modem URL
+        icon: mdi:web
+      - entity: sensor.REPEATER_SLUG_sensor_modem_datetime_utc
+        name: Modem UTC Time
+        icon: mdi:clock-outline
+      - type: divider
+      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_v
+        name: Battery Voltage
+        icon: mdi:flash
+      - entity: sensor.REPEATER_SLUG_sensor_modem_battery_voltage_mv
+        name: Battery Voltage mV
+        icon: mdi:flash-outline
+      - entity: sensor.REPEATER_SLUG_sensor_modem_bus_voltage_v
+        name: Bus Voltage
+        icon: mdi:flash-outline
+      - entity: sensor.REPEATER_SLUG_sensor_modem_current_ma
+        name: Current
+        icon: mdi:current-dc
+      - entity: sensor.REPEATER_SLUG_sensor_modem_power_mw
+        name: Power
+        icon: mdi:flash
+      - entity: sensor.REPEATER_SLUG_sensor_modem_die_temperature_c
+        name: Modem Temperature
+        icon: mdi:thermometer
+    - type: entities
+      title: GPS Sync & Updates
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: binary_sensor.REPEATER_SLUG_gps_time_sync_enabled
+        name: Time Sync Enabled
+      - entity: sensor.REPEATER_SLUG_gps_time_sync_state
+        name: Time Sync State
+      - entity: sensor.REPEATER_SLUG_gps_utc_time
+        name: UTC Time
+      - entity: binary_sensor.REPEATER_SLUG_gps_location_updates_enabled
+        name: Location Updates Enabled
+      - entity: sensor.REPEATER_SLUG_gps_location_update_state
+        name: Location Update State
+      - entity: sensor.REPEATER_SLUG_gps_last_sentence_type
+        name: Last Sentence Type
+      - entity: sensor.REPEATER_SLUG_gps_valid_checksums
+        name: Valid Checksums
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Diagnostics · tuning & storage
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Metrics Database
+      show_header_toggle: false
+      entities:
       - entity: sensor.REPEATER_SLUG_database_size
         name: Database Size
         icon: mdi:database
@@ -646,5 +1024,120 @@ cards:
       - entity: button.REPEATER_SLUG_vacuum_metrics_database
         name: Vacuum Metrics Database
         icon: mdi:database-refresh
-
-show_icon_and_title: true
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Advert Penalty Tuning
+      show_header_toggle: false
+      entities:
+      - entity: number.REPEATER_SLUG_advert_base_penalty
+        name: Base Penalty
+      - entity: number.REPEATER_SLUG_advert_penalty_multiplier
+        name: Penalty Multiplier
+      - entity: number.REPEATER_SLUG_advert_max_penalty
+        name: Max Penalty
+      - entity: number.REPEATER_SLUG_advert_violation_threshold
+        name: Violation Threshold
+      - entity: number.REPEATER_SLUG_advert_violation_decay
+        name: Violation Decay
+      - entity: number.REPEATER_SLUG_advert_bucket_capacity
+        name: Bucket Capacity
+      - entity: number.REPEATER_SLUG_advert_refill_tokens
+        name: Refill Tokens
+      - entity: number.REPEATER_SLUG_advert_refill_interval
+        name: Refill Interval
+      - entity: number.REPEATER_SLUG_advert_ewma_alpha
+        name: EWMA Alpha
+      - entity: number.REPEATER_SLUG_advert_hysteresis
+        name: Hysteresis
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Advert Rate Limiting
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: switch.REPEATER_SLUG_advert_rate_limit
+        name: Rate Limit Enabled
+        icon: mdi:speedometer-slow
+      - entity: binary_sensor.REPEATER_SLUG_advert_adaptive_enabled
+        name: Adaptive Enabled
+        icon: mdi:auto-fix
+      - entity: switch.REPEATER_SLUG_advert_adaptive_control
+        name: Adaptive Control
+        icon: mdi:tune-variant
+      - entity: binary_sensor.REPEATER_SLUG_advert_dedupe_enabled
+        name: Dedupe Enabled
+        icon: mdi:content-duplicate
+      - entity: switch.REPEATER_SLUG_advert_penalty_box
+        name: Penalty Box
+        icon: mdi:account-cancel
+      - entity: number.REPEATER_SLUG_advert_minimum_interval
+        name: Minimum Interval
+      - entity: number.REPEATER_SLUG_advert_quiet_max
+        name: Quiet Max
+      - entity: number.REPEATER_SLUG_advert_normal_max
+        name: Normal Max
+      - entity: number.REPEATER_SLUG_advert_busy_max
+        name: Busy Max
+    - type: entities
+      title: Advert System
+      state_color: true
+      show_header_toggle: false
+      entities:
+      - entity: sensor.REPEATER_SLUG_advert_tier
+        name: Advert Tier
+        icon: mdi:stairs
+      - entity: sensor.REPEATER_SLUG_adverts_allowed
+        name: Adverts Allowed
+        icon: mdi:check-circle-outline
+      - entity: sensor.REPEATER_SLUG_adverts_dropped
+        name: Adverts Dropped
+        icon: mdi:close-circle-outline
+      - entity: sensor.REPEATER_SLUG_advert_drop_rate
+        name: Advert Drop Rate
+        icon: mdi:chart-bell-curve
+      - entity: sensor.REPEATER_SLUG_tracked_advert_hashes
+        name: Tracked Advert Hashes
+        icon: mdi:fingerprint
+      - entity: sensor.REPEATER_SLUG_tracked_advert_pubkeys
+        name: Tracked Advert Pubkeys
+        icon: mdi:key-chain
+    grid_options:
+      columns: full
+      rows: auto
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Reference notes
+    heading_style: title
+    grid_options:
+      columns: full
+      rows: 1
+- type: grid
+  column_span: 1
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: markdown
+      title: Monitoring Notes
+      content: Radio settings are read-only configuration, not per-radio traffic metrics. Battery charging/discharging/neutral
+        is derived only from fresh signed solar charge rate (%/h), not current or power. Zero does not mean full.
+        Unknown or unavailable measurements are not healthy zeroes. Remove unsupported dynamic example rows and
+        keep only this Repeater's sources.
+    grid_options:
+      columns: full
+      rows: auto

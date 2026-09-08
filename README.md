@@ -26,6 +26,8 @@ This custom integration connects Home Assistant directly to the Repeater's local
 
 The integration uses coordinated local polling instead of making a separate API request for every entity. The polling interval is configurable in the integration options and defaults to 15 seconds.
 
+Normal polling reads the Repeater's cached update status without discovering GitHub branches. A separate scheduled check runs at one minute past each hour (`HH:01:00`) in Home Assistant's configured timezone, respecting the Repeater's cache and rate-limit hold. It does not check immediately on startup or install anything, and skips a check already in progress or an installation. The **Check for updates** button and explicit action still request a manual check. The channel selector uses `main`, `dev`, and the current channel without querying GitHub.
+
 > [!NOTE]
 > The integration domain and folder remain `pymc_repeater` so existing installations and entity registry entries continue to work. The user-facing name is **openHop Repeater**.
 
@@ -33,13 +35,14 @@ The integration uses coordinated local polling instead of making a separate API 
 
 - UI-based setup and options flows
 - Configurable integration-wide polling interval
-- Repeater, radio, packet, routing, and signal-quality telemetry
-- MQTT broker and handler status
+- Repeater, single/multi-radio stack, packet, routing, and signal-quality telemetry
+- MQTT broker, handler, and neighbor-publication status
 - Hardware, process, network, database, and metrics diagnostics
 - GPS position, fix, satellite, time-sync, and location-update data
 - External sensor-manager entities, including supported modem and UPS readings
-- Neighbor-link counts and on-demand neighbor history
-- Default-region, duty-cycle, advert-rate, and Repeater-mode controls
+- Application-plugin health counts (installed, enabled, running, and failed)
+- Neighbor-link counts, neighbor-scope queries, and on-demand neighbor history
+- Default-region, duty-cycle, advert-rate, advert-schedule, and Repeater-mode controls
 - Update status, update-channel selection, and update actions
 - CAD calibration controls and manual CAD checks
 - Native Home Assistant diagnostics and an extensive example dashboard
@@ -111,7 +114,7 @@ A comprehensive native Lovelace view is included at:
 
 [`dashboards/openhop_repeater_dashboard.yaml`](dashboards/openhop_repeater_dashboard.yaml)
 
-The template covers radio health, packet flow, LBT diagnostics, routing, neighbor links, controls, advert tuning, MQTT, companions, GPS, external modem readings, updates, and database metrics.
+The template covers radio health and stack diagnostics, packet flow, LBT diagnostics, routing, neighbor links, plugin health, controls, advert tuning, MQTT, companions, GPS, external modem power readings, updates, and database metrics.
 
 To use it:
 
@@ -121,22 +124,53 @@ To use it:
 4. Create or edit a dashboard view and paste the template into the view's YAML editor.
 5. Optionally change the view `title` and `path`.
 6. Replace the marked example MQTT broker and companion rows with entities from your installation.
-7. If your external sensor is not named `modem`, replace `_sensor_modem_` with its actual sensor slug.
+7. The modem percentage card automatically finds active battery and solar-rate entities even when Home Assistant adds an area prefix or numeric suffix.
+8. For other dynamic rows, replace the complete example entity ID with the active entity ID shown in your instance. If the external sensor is not named `modem`, also update `_sensor_modem_` in the percentage card's two match strings.
 
-The dashboard uses only built-in Home Assistant cards.
+The dashboard uses only built-in Home Assistant cards and the current Sections frontend (configuration saved and read back on HA 2026.9; rendered layout still needs browser verification). Full-width ordered bands put Live overview first, then short single-unit Recent trends, Operations, grouped Diagnostics, and Reference notes last. Three desktop columns collapse with the native responsive grid; dense placement is disabled so diagnostic cards cannot jump above the essentials. Each detail column is a native vertical stack in its own single-column section: short cards keep their natural height instead of stretching to the tallest neighboring card. Smaller cards share columns to reduce empty rows. The overview retains six key metrics plus optional battery/temperature; secondary metrics remain in diagnostics. Badges explicitly show their names, GPS stays in diagnostics, and the software update tile shares a compact column with update management. Numeric precision is left to Home Assistant; no global entity-registry settings are changed. Compact metric tiles replace duplicate gauges; all detailed readings and controls remain below. Alert banners cover explicit API/statistics/hardware failures, not disabled GPS. This view layout requires a newer frontend than the integration's minimum HA version. The comprehensive view also includes component endpoint problems, last successful poll, source age/stale, radio child inventory/settings, per-plugin status, fresh battery charge trend, and a native update tile (opens more-info; it does not install automatically). Replace the new dynamic example rows with exact entity IDs from the same Repeater config entry, including its radio child devices; repeat rows for multiple sources and remove unsupported rows/cards. Radio device prefixes are independent of `REPEATER_SLUG`. Battery trend is charging/discharging/neutral from fresh signed %/h, never an inferred full-battery indication. When replacing an existing view, retain its title, path, icon and other view metadata, and back up the complete dashboard first.
 
 ## Actions
 
 The integration exposes Home Assistant actions for supported Repeater operations, including:
 
-- Sending adverts and restarting the Repeater service
+- Sending flood or direct adverts and restarting the Repeater service
 - Checking for and installing updates
-- Reading broker presets and neighbor-link history
+- Reading broker presets, neighbor-link history, and stored neighbor scopes
+- Querying one zero-hop neighbor's scopes or scheduling an MQTT neighbors publication cycle
 - Running manual CAD checks and CAD calibration
 - Saving CAD settings
 - Reading advert, companion, and contact diagnostics
 
 Open **Developer tools → Actions** and search for `openHop Repeater` or `pymc_repeater` to see the actions and their current fields.
+
+- aligned advanced action http budgets with backend waits plus a finite margin for ping and manual cad checks and companion text sends and login and commands
+- bounded ping reply waits to 1–60 seconds with 6 additional http seconds and companion status and telemetry waits to 1–120 seconds with 10 additional http seconds
+- added optional `response_variable` support to `pymc_repeater.companion_request_status` and `pymc_repeater.companion_request_telemetry` with unwrapped backend dictionaries and non-dictionary results wrapped under `result` while preserving calls without responses and avoiding polling or entity attributes for these results
+- surfaced explicit companion `sent: false` results as action errors without treating omitted `sent` fields on older backends as failures
+
+The raw radio-config action accepts the Repeater dev `radio_id` field for multi-radio targeting and `direct_advert_interval_hours` for the additional advert schedule. The raw MQTT-config action accepts custom `base_topic` values and neighbor-publisher settings supported by current Repeater dev builds.
+
+### Plugin health and bucketed neighbor history
+
+Application-plugin counts use the installed plugin manager's lightweight `/api/plugins/` list on the shared polling schedule. These are separate from external sensor-manager readings. Counts and an allowlist of plugin ID, name, version, enabled, state, and has_runtime enter coordinator data. Paths, settings, logs, PID, descriptions and repository URLs are not retained. An empty inventory reports zero; unsupported/unavailable manager endpoints or malformed inventory leave the counts unknown rather than falsely reporting a healthy empty installation. Authentication and connection failures still fail the regular refresh.
+
+`Enabled plugins` is not the same as `Running plugins`: UI-only plugins can be enabled without a running process. `Failed plugins` counts only the manager's explicit `FAILED` state, not stopped/disabled plugins.
+
+The existing `pymc_repeater.get_neighbor_link_history` response-returning action accepts optional `bucket_seconds` (integer, minimum 60). Omit it to preserve the raw `rows` response. Supply it to receive `buckets`, `bucket_seconds`, and a bucket `count`; `limit` caps returned buckets rather than raw observations. This requires a Repeater build supporting bucketed history and is never polled automatically. For example:
+
+```yaml
+action: pymc_repeater.get_neighbor_link_history
+data:
+  config_entry_id: YOUR_CONFIG_ENTRY_ID
+  peer_hash: AB
+  path_hash_size: 1
+  hours: 24
+  limit: 1000
+  bucket_seconds: 300
+response_variable: neighbor_history
+```
+
+Replace the example entry ID and peer hash with your target. Omit `bucket_seconds` for older Repeater builds; there is no silent fallback from buckets to raw rows. See [installed API alignment notes](docs/installed-api-alignment.md) for the audited source contract and intentionally deferred capabilities.
 
 ## Authentication and persistent storage
 
@@ -167,6 +201,20 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 - [openHop Repeater Home Assistant add-on](https://github.com/openhop-dev/openHop-HA-Add-on)
 - [Release notes](CHANGELOG.md)
 - [Issue tracker](https://github.com/openhop-dev/openHop-HA-Integration/issues)
+
+## Operational monitoring
+
+- added parent repeater `radio_status` and `radio_problem` entities from aggregate runtime health rather than api connectivity or configured child radios with `radio_error` exposed only as a boolean or unknown attribute and never raw exception text
+- recognized `single_fabric` for single-radio lifecycle handling and guarded global settings fallback to the sole named default while preferring `radio_type` over legacy `type` for configured inventory
+- preferred each reading envelope's `poll_interval_seconds` for freshness and retained the legacy global-summary fallback only when that field was absent
+- documented that effective per-reading cadence required a companion backend scheduler metadata change not yet released or deployed and that updating this integration alone could not establish legacy plugin cadence
+
+Aggregate flood/direct received, transmitted, and duplicate packet counters are
+exposed on the parent Repeater device using existing stats polling. These are
+process-lifetime totals, not per-radio counters or hourly rates; missing values
+remain unknown.
+
+See [operational monitoring](docs/operational-monitoring.md) for radio child devices, source freshness and component diagnostics, native update installation safety, plugin health, battery units, alert blueprints, and the separate compact operations view.
 
 ## Development
 

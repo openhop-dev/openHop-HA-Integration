@@ -37,15 +37,45 @@
         "data": {
           "data_size_unit": "Data size display unit",
           "uptime_unit": "System uptime display unit",
-          "scan_interval": "Integration refresh interval (seconds)"
+          "scan_interval": "Integration refresh interval (seconds)",
+          "radio_id_aliases": "Radio ID aliases (JSON)"
+        },
+        "data_description": {
+          "radio_id_aliases": "Map renamed runtime radio IDs to their previous Home Assistant IDs using a JSON object, for example source local mapped to target radio0. Confirm that each pair is the same physical radio. IDs are case-sensitive and are not device names. Use an empty JSON object to clear aliases. IDs must be nonempty strings without whitespace. Targets must be unique; chains, cycles, and simultaneous source/target runtime IDs are not allowed. A target may return on its own. Saving reloads the integration. See the operational monitoring documentation for JSON examples and radio retirement behavior."
         }
       }
+    },
+    "error": {
+      "invalid_radio_aliases": "Enter a JSON object mapping runtime IDs to previous Home Assistant IDs. Use unique nonempty strings without whitespace, no duplicate keys or targets, and no chains, cycles, or targets already used by runtime radios. Use {} to clear aliases."
     }
   },
   "entity": {
     "sensor": {
+      "radio_status": {
+        "name": "Radio status",
+        "state": {"ok": "OK", "degraded": "Degraded", "disabled": "Disabled"}
+      },
+      "recv_flood_count": {"name": "Flood packets received"},
+      "recv_direct_count": {"name": "Direct packets received"},
+      "sent_flood_count": {"name": "Flood packets transmitted"},
+      "sent_direct_count": {"name": "Direct packets transmitted"},
+      "flood_dup_count": {"name": "Flood duplicates"},
+      "direct_dup_count": {"name": "Direct duplicates"},
+      "plugins_installed": {"name": "Installed plugins"},
+      "plugins_enabled": {"name": "Enabled plugins"},
+      "plugins_running": {"name": "Running plugins"},
+      "plugins_failed": {"name": "Failed plugins"},
       "repeater_version": {
         "name": "Repeater version"
+      },
+      "radio_stack_mode": {
+        "name": "Radio stack mode"
+      },
+      "configured_radio_count": {
+        "name": "Configured radio count"
+      },
+      "mqtt_neighbors_phase": {
+        "name": "MQTT neighbors phase"
       },
       "packets_24h": {
         "name": "Packets (24h)"
@@ -99,7 +129,24 @@
         "name": "System uptime"
       }
     },
+    "button": {
+      "send_direct_advert": {
+        "name": "Send direct advert"
+      },
+      "publish_neighbors": {
+        "name": "Publish MQTT neighbors"
+      }
+    },
+    "number": {
+      "flood_advert_interval_hours": {
+        "name": "Flood advert interval"
+      },
+      "direct_advert_interval_hours": {
+        "name": "Direct advert interval"
+      }
+    },
     "binary_sensor": {
+      "radio_problem": {"name": "Radio problem"},
       "mqtt_handler_active": {
         "name": "MQTT handler active"
       },

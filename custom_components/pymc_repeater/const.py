@@ -8,6 +8,7 @@ CONF_TOKEN_ID = "token_id"
 CONF_TOKEN_NAME = "token_name"
 CONF_DATA_SIZE_UNIT = "data_size_unit"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_RADIO_ID_ALIASES = "radio_id_aliases"
 CONF_UPTIME_UNIT = "uptime_unit"
 
 DEFAULT_PORT = 8000

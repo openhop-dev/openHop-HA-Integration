@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from typing import Any
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,34 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn("/api/neighbor_link_history", source)
         self.assertIn("'neighbor_links': self.async_get_neighbor_links()", source)
 
+    def test_neighbor_scope_and_direct_advert_contracts_exist(self) -> None:
+        module = _module("api.py")
+        client = next(
+            node for node in module.body if isinstance(node, ast.ClassDef) and node.name == "PyMCRepeaterApiClient"
+        )
+        source = ast.unparse(client)
+
+        for expected in (
+            "async_get_neighbor_scopes",
+            "'/api/neighbor_scopes'",
+            "async_query_neighbor_scopes",
+            "'/api/query_neighbor_scopes'",
+            "async_publish_neighbors",
+            "'/api/publish_neighbors'",
+            "NEIGHBOR_SCOPE_QUERY_TIMEOUT",
+            "{'mode': mode}",
+        ):
+            self.assertIn(expected, source)
+
+        buttons = (COMPONENT / "button.py").read_text(encoding="utf-8")
+        numbers = (COMPONENT / "number.py").read_text(encoding="utf-8")
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn('key="send_direct_advert"', buttons)
+        self.assertIn('key="publish_neighbors"', buttons)
+        self.assertIn('key="flood_advert_interval_hours"', numbers)
+        self.assertIn('key="direct_advert_interval_hours"', numbers)
+        self.assertIn('key="mqtt_neighbors_phase"', sensor)
+
     def test_cad_client_contract_includes_new_dev_fields(self) -> None:
         module = _module("api.py")
         start = ast.unparse(
@@ -84,6 +113,10 @@ class DevApiAlignmentTests(unittest.TestCase):
             "SERVICE_CAD_MANUAL_CHECK",
             "SERVICE_GET_NEIGHBOR_LINKS",
             "SERVICE_GET_NEIGHBOR_LINK_HISTORY",
+            "SERVICE_SEND_ADVERT",
+            "SERVICE_PUBLISH_NEIGHBORS",
+            "SERVICE_GET_NEIGHBOR_SCOPES",
+            "SERVICE_QUERY_NEIGHBOR_SCOPES",
         ):
             self.assertIn(service, setup)
         self.assertIn("vol.In([1, 2, 4, 8, 16])", setup)
@@ -97,12 +130,214 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn('key="neighbor_link_count"', source)
         self.assertIn('key="active_neighbor_link_count"', source)
         self.assertIn('key="metrics_data_source"', source)
+        self.assertIn('key="radio_stack_mode"', source)
+        self.assertIn('key="configured_radio_count"', source)
+
+    def test_current_external_sensor_payloads_have_units(self) -> None:
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+
+        for field, unit in (
+            ("battery_voltage_v", "V"),
+            ("bus_voltage_v", "V"),
+            ("current_ma", "mA"),
+            ("power_mw", "mW"),
+            ("pressure_hpa", "hPa"),
+            ("die_temperature_c", "°C"),
+            ("last_rssi_dbm", "dBm"),
+            ("last_snr_db", "dB"),
+            ("noise_floor_dbm", "dBm"),
+            ("frequency_hz", "Hz"),
+            ("bandwidth_hz", "Hz"),
+            ("tx_power_dbm", "dBm"),
+            ("solar_charge_rate_percent_per_hour", "%/h"),
+        ):
+            self.assertIn(f'"{field}": "{unit}"', source)
+        self.assertIn('if sensor_type == "openhop_modem"', source)
+        self.assertIn('sensor_type = "pymc_modem"', source)
+
+    def test_external_sensor_battery_percentage_alias_is_additive(self) -> None:
+        module = _module("sensor.py")
+        helpers = [
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_external_sensor_payload"
+        ]
+        self.assertTrue(helpers, "Missing external sensor payload normalizer")
+        namespace: dict[str, Any] = {"Any": Any}
+        exec(
+            compile(ast.Module(body=[helpers[0]], type_ignores=[]), "<sensor-payload>", "exec"),
+            namespace,
+        )
+        normalize = namespace["_external_sensor_payload"]
+
+        payload = normalize({"data": {"battery_percentage": "74"}})
+        self.assertEqual(payload["battery_percentage"], "74")
+        self.assertEqual(payload["battery_percent"], "74")
+        canonical = normalize(
+            {"data": {"battery_percentage": 74, "battery_percent": 73}}
+        )
+        self.assertEqual(canonical["battery_percent"], 73)
+
+    def test_external_sensor_measurements_normalize_numeric_strings(self) -> None:
+        module = _module("sensor.py")
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        helpers = [
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_normalize_external_sensor_value"
+        ]
+        self.assertTrue(helpers, "Missing external sensor value normalizer")
+        helper = helpers[0]
+        import runpy
+        monitoring = runpy.run_path(str(COMPONENT / "monitoring.py"))
+        namespace: dict[str, Any] = {"Any": Any, "finite_number": monitoring["finite_number"]}
+        exec(
+            compile(ast.Module(body=[helper], type_ignores=[]), "<sensor-value>", "exec"),
+            namespace,
+        )
+        normalize = namespace["_normalize_external_sensor_value"]
+
+        self.assertEqual(normalize("12.5", has_unit=True), 12.5)
+        self.assertEqual(normalize(0, has_unit=True), 0)
+        self.assertIsNone(normalize("not-a-number", has_unit=True))
+        self.assertEqual(normalize("active", has_unit=False), "active")
+        self.assertIn("_normalize_external_sensor_value", source)
+        self.assertIn("has_unit=self._attr_native_unit_of_measurement is not None", source)
+
+    def test_flood_advert_number_enforces_repeater_bounds(self) -> None:
+        source = (COMPONENT / "number.py").read_text(encoding="utf-8")
+
+        self.assertIn("async def _async_set_flood_advert_interval", source)
+        self.assertIn("hours != 0 and not 3 <= hours <= 168", source)
+        self.assertIn("Flood advert interval must be 0 (off) or 3-168 hours", source)
+        self.assertIn("set_fn=_async_set_flood_advert_interval", source)
+
+    def test_identity_polling_drops_private_configuration(self) -> None:
+        module = _module("api.py")
+        method = ast.unparse(
+            _class_method(module, "PyMCRepeaterApiClient", "async_get_identities")
+        )
+        source = (COMPONENT / "api.py").read_text(encoding="utf-8")
+
+        self.assertIn("_drop_sensitive_fields", method)
+        for key in (
+            "identity_key",
+            "private_key",
+            "admin_password",
+            "guest_password",
+            "password",
+            "token",
+            "transport_key",
+            "jwt_secret",
+        ):
+            self.assertIn(f'"{key}"', source)
+
+        helper = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_drop_sensitive_fields"
+        )
+        namespace: dict[str, Any] = {
+            "Any": Any,
+            "SENSITIVE_RESPONSE_KEYS": {
+                "identity_key",
+                "private_key",
+                "admin_password",
+                "guest_password",
+                "password",
+                "token",
+                "transport_key",
+                "jwt_secret",
+            },
+        }
+        exec(
+            compile(ast.Module(body=[helper], type_ignores=[]), "<sanitizer>", "exec"),
+            namespace,
+        )
+        sanitized = namespace["_drop_sensitive_fields"](
+            {
+                "configured": [
+                    {
+                        "name": "Example",
+                        "identity_key": "secret",
+                        "settings": {"admin_password": "secret", "port": 5000},
+                    }
+                ]
+            }
+        )
+        self.assertEqual(
+            sanitized,
+            {"configured": [{"name": "Example", "settings": {"port": 5000}}]},
+        )
+
+    def test_transport_key_polling_drops_key_material(self) -> None:
+        module = _module("api.py")
+        method = ast.unparse(
+            _class_method(module, "PyMCRepeaterApiClient", "async_get_transport_keys")
+        )
+
+        self.assertIn("transport_key", method)
+        self.assertIn("safe_item.pop", method)
+        self.assertNotIn(
+            'return await self._async_request_wrapped("GET", "/api/transport_keys")',
+            method,
+        )
+
+    def test_diagnostics_redact_runtime_installation_data(self) -> None:
+        source = (COMPONENT / "diagnostics.py").read_text(encoding="utf-8")
+
+        self.assertIn('"data": async_redact_data(coordinator.data, TO_REDACT)', source)
+        for key in (
+            "token",
+            "password",
+            "jwt_secret",
+            "identity_key",
+            "private_key",
+            "transport_key",
+            "latitude",
+            "longitude",
+            "network_current_ip",
+            "public_key",
+            "pubkey",
+        ):
+            self.assertIn(f'"{key}"', source)
+
+    def test_new_entities_have_translation_keys(self) -> None:
+        translations = json.loads(
+            (COMPONENT / "translations" / "en.json").read_text(encoding="utf-8")
+        )["entity"]
+        expected = {
+            "button": ("send_direct_advert", "publish_neighbors"),
+            "number": (
+                "flood_advert_interval_hours",
+                "direct_advert_interval_hours",
+            ),
+            "sensor": (
+                "mqtt_neighbors_phase",
+                "radio_stack_mode",
+                "configured_radio_count",
+            ),
+        }
+
+        for platform, keys in expected.items():
+            source = (COMPONENT / f"{platform}.py").read_text(encoding="utf-8")
+            for key in keys:
+                self.assertIn(key, translations.get(platform, {}))
+                self.assertIn(f'translation_key="{key}"', source)
+        number_source = (COMPONENT / "number.py").read_text(encoding="utf-8")
+        self.assertIn("self._attr_translation_key = description.translation_key", number_source)
 
     def test_service_descriptions_include_new_actions(self) -> None:
         source = (COMPONENT / "services.yaml").read_text(encoding="utf-8")
         self.assertIn("cad_manual_check:", source)
         self.assertIn("get_neighbor_links:", source)
         self.assertIn("get_neighbor_link_history:", source)
+        self.assertIn("send_advert:", source)
+        self.assertIn("publish_neighbors:", source)
+        self.assertIn("get_neighbor_scopes:", source)
+        self.assertIn("query_neighbor_scopes:", source)
         self.assertIn("cad_symbol_num:", source)
         self.assertIn("known_signal_present:", source)
 
@@ -123,16 +358,17 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn("async_update_listeners()", coordinator)
         self.assertNotIn("async_set_updated_data", coordinator)
 
-    def test_release_metadata_and_changelog_are_v1_1_6(self) -> None:
+    def test_release_metadata_and_changelog_are_v1_2_0(self) -> None:
         manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         workflow = (ROOT / ".github/workflows/python-smoke.yaml").read_text(
             encoding="utf-8"
         )
 
-        self.assertEqual(manifest["version"], "1.1.6")
+        self.assertEqual(manifest["version"], "1.2.0")
         self.assertIn("## 1.1.6", changelog)
-        self.assertNotIn("## Unreleased", changelog)
+        self.assertIn("## Unreleased", changelog)
+        self.assertIn("## 1.2.0", changelog)
         for expected in (
             "15 seconds",
             "GPS stream",
@@ -145,6 +381,37 @@ class DevApiAlignmentTests(unittest.TestCase):
             self.assertIn(expected, changelog)
         self.assertIn("actions/setup-python@v7", workflow)
 
+    def test_dashboard_percentage_cards_use_percentage_states_and_dynamic_modem_lookup(self) -> None:
+        dashboard = (ROOT / "dashboards/openhop_repeater_dashboard.yaml").read_text(
+            encoding="utf-8"
+        )
+        overview = dashboard.split("heading: Live overview", 1)[1].split(
+            "heading: Recent trends", 1
+        )[0]
+
+        self.assertIn("sensor.REPEATER_SLUG_cpu_usage", overview)
+        self.assertIn("sensor.REPEATER_SLUG_radio_utilization", overview)
+        self.assertIn("sensor.REPEATER_SLUG_packet_drop_rate_24h", overview)
+        # Airtime has its own native-unit tile; it is never a percentage gauge.
+        self.assertNotIn("type: gauge", dashboard)
+        self.assertIn(
+            "'REPEATER_SLUG_sensor_modem_battery_percent' in item.entity_id",
+            dashboard,
+        )
+        self.assertIn(
+            "'REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour' in item.entity_id",
+            dashboard,
+        )
+        self.assertNotIn(
+            "entity: sensor.REPEATER_SLUG_sensor_modem_battery_percent\n",
+            dashboard,
+        )
+        self.assertNotIn(
+            "entity: sensor.REPEATER_SLUG_sensor_modem_solar_charge_rate_percent_per_hour\n",
+            dashboard,
+        )
+        self.assertIn("area prefixes or numeric suffixes", dashboard)
+
     def test_example_dashboard_is_anonymized_and_includes_v1_1_6_entities(self) -> None:
         dashboard = (ROOT / "dashboards/openhop_repeater_dashboard.yaml").read_text(
             encoding="utf-8"
@@ -154,6 +421,14 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn("sensor.REPEATER_SLUG_observed_neighbor_links", dashboard)
         self.assertIn("sensor.REPEATER_SLUG_active_neighbor_links", dashboard)
         self.assertIn("sensor.REPEATER_SLUG_metrics_data_source", dashboard)
+        self.assertIn("sensor.REPEATER_SLUG_mqtt_neighbors_phase", dashboard)
+        self.assertIn("sensor.REPEATER_SLUG_radio_stack_mode", dashboard)
+        self.assertIn("sensor.REPEATER_SLUG_configured_radio_count", dashboard)
+        self.assertIn("sensor.REPEATER_SLUG_sensor_modem_current_ma", dashboard)
+        self.assertIn("sensor.REPEATER_SLUG_sensor_modem_power_mw", dashboard)
+        self.assertIn("button.REPEATER_SLUG_send_direct_advert", dashboard)
+        self.assertIn("button.REPEATER_SLUG_publish_mqtt_neighbors", dashboard)
+        self.assertIn("number.REPEATER_SLUG_direct_advert_interval", dashboard)
         self.assertIn("External Modem Status", dashboard)
         self.assertIn("Example Broker 1", dashboard)
         self.assertIn("Example Companion", dashboard)

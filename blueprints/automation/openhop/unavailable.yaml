@@ -1,0 +1,32 @@
+blueprint:
+  name: "openHop: Sustained unavailability"
+  description: >-
+    Select one entity and your own actions. The condition must persist for the
+    selected duration. No notification service or corrective action is assumed.
+    Timers reset after Home Assistant restart or automation reload. Threshold
+    alerts trigger on crossing, not repeatedly while already beyond the limit.
+  domain: automation
+  input:
+    entity:
+      name: Entity to monitor
+      selector:
+        entity:
+          domain: sensor
+    duration:
+      name: Sustained duration
+      default:
+        minutes: 5
+      selector:
+        duration: {}
+    actions:
+      name: Actions to run
+      selector:
+        action: {}
+trigger:
+  - platform: state
+    entity_id: !input entity
+    to: "unavailable"
+    for: !input duration
+condition: []
+action: !input actions
+mode: single

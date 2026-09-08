@@ -21,6 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
+from .monitoring import finite_number, measurement_class, reading_usable
 from .api import get_repeater_name_from_stats
 from .const import (
     CONF_DATA_SIZE_UNIT,
@@ -64,6 +65,54 @@ def _packet_drop_rate(data: dict[str, Any]) -> float | None:
 def _mqtt_connected_count(data: dict[str, Any]) -> int:
     brokers = _nested(data, "mqtt_status", "brokers") or []
     return sum(1 for broker in brokers if _nested(broker, "status", "connected"))
+
+
+def _mqtt_neighbors_status(data: dict[str, Any]) -> dict[str, Any]:
+    status = _nested(data, "mqtt_status", "neighbors") or {}
+    return status if isinstance(status, dict) else {}
+
+
+def _radio_status(data: dict[str, Any]) -> str | None:
+    """Return only known aggregate runtime states, never inferred RF health."""
+    stats = _nested(data, "stats")
+    if not isinstance(stats, dict) or stats.get("error") or stats.get("success") is False:
+        return None
+    status = stats.get("radio_status")
+    return status if isinstance(status, str) and status in ("ok", "degraded", "disabled") else None
+
+
+def _radio_error(data: dict[str, Any]) -> bool | None:
+    """Expose presence only: backend exception text can contain private data."""
+    stats = _nested(data, "stats")
+    if not isinstance(stats, dict) or stats.get("error") or stats.get("success") is False:
+        return None
+    error = stats.get("radio_error")
+    if isinstance(error, str) and error.strip():
+        return True
+    # get_stats omits radio_error when clear. Without a known runtime state,
+    # omission is not evidence of health (older backends omit both fields).
+    if error is None or isinstance(error, str):
+        return False if _radio_status(data) is not None else None
+    return None
+
+
+def _radio_problem(data: dict[str, Any]) -> bool | None:
+    """Disabled/degraded or an explicit aggregate error is a radio problem."""
+    status = _radio_status(data)
+    error = _radio_error(data)
+    if status in ("degraded", "disabled") or error is True:
+        return True
+    return False if status == "ok" and error is False else None
+
+
+def _radio_stack(data: dict[str, Any]) -> dict[str, Any]:
+    stack = _nested(data, "stats", "radio_stack") or {}
+    return stack if isinstance(stack, dict) else {}
+
+
+def _configured_radio_ids(data: dict[str, Any]) -> list[str]:
+    radio_ids = _radio_stack(data).get("radio_ids") or []
+    return [str(radio_id) for radio_id in radio_ids] if isinstance(radio_ids, list) else []
 
 
 def _update_channel_options(data: dict[str, Any]) -> list[str]:
@@ -169,7 +218,21 @@ def _external_sensor_readings(data: dict[str, Any]) -> list[dict[str, Any]]:
 def _external_sensor_identity(reading: dict[str, Any]) -> str:
     name = str(reading.get("name") or "sensor")
     sensor_type = str(reading.get("type") or "sensor")
+    # Preserve existing Home Assistant unique IDs across the Repeater plug-in rename.
+    if sensor_type == "openhop_modem":
+        sensor_type = "pymc_modem"
     return slugify(f"{name}_{sensor_type}") or "sensor"
+
+
+def _external_sensor_payload(reading: dict[str, Any]) -> dict[str, Any]:
+    """Return a normalized copy while preserving original sensor fields."""
+    raw_payload = reading.get("data") or {}
+    if not isinstance(raw_payload, dict):
+        return {}
+    payload = dict(raw_payload)
+    if "battery_percent" not in payload and "battery_percentage" in payload:
+        payload["battery_percent"] = payload["battery_percentage"]
+    return payload
 
 
 def _external_sensor_data_items(data: dict[str, Any]) -> list[tuple[dict[str, Any], str, Any]]:
@@ -177,13 +240,18 @@ def _external_sensor_data_items(data: dict[str, Any]) -> list[tuple[dict[str, An
     for reading in _external_sensor_readings(data):
         if not isinstance(reading, dict):
             continue
-        payload = reading.get("data") or {}
-        if not isinstance(payload, dict):
-            continue
+        payload = _external_sensor_payload(reading)
         for key, value in payload.items():
             if isinstance(value, (str, int, float)) and not isinstance(value, bool):
                 items.append((reading, str(key), value))
     return items
+
+
+def _normalize_external_sensor_value(value: Any, *, has_unit: bool) -> Any:
+    """Coerce measurement strings and reject invalid measurement states."""
+    if not has_unit:
+        return value
+    return finite_number(value)
 
 
 def _external_sensor_ok_count(data: dict[str, Any]) -> int:
@@ -242,6 +310,67 @@ class PyMCSensorDescription(SensorEntityDescription):
 
 
 SENSORS: tuple[PyMCSensorDescription, ...] = (
+    # Aggregate engine counters restart at zero with the Repeater process.
+    PyMCSensorDescription(
+        key="recv_flood_count",
+        translation_key="recv_flood_count",
+        name="Flood packets received",
+        icon="mdi:download-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="packets",
+        value_fn=lambda data: _nested(data, "stats", "recv_flood_count"),
+    ),
+    PyMCSensorDescription(
+        key="recv_direct_count",
+        translation_key="recv_direct_count",
+        name="Direct packets received",
+        icon="mdi:download-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="packets",
+        value_fn=lambda data: _nested(data, "stats", "recv_direct_count"),
+    ),
+    PyMCSensorDescription(
+        key="sent_flood_count",
+        translation_key="sent_flood_count",
+        name="Flood packets transmitted",
+        icon="mdi:upload-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="packets",
+        value_fn=lambda data: _nested(data, "stats", "sent_flood_count"),
+    ),
+    PyMCSensorDescription(
+        key="sent_direct_count",
+        translation_key="sent_direct_count",
+        name="Direct packets transmitted",
+        icon="mdi:upload-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="packets",
+        value_fn=lambda data: _nested(data, "stats", "sent_direct_count"),
+    ),
+    PyMCSensorDescription(
+        key="flood_dup_count",
+        translation_key="flood_dup_count",
+        name="Flood duplicates",
+        icon="mdi:content-duplicate",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="packets",
+        value_fn=lambda data: _nested(data, "stats", "flood_dup_count"),
+    ),
+    PyMCSensorDescription(
+        key="direct_dup_count",
+        translation_key="direct_dup_count",
+        name="Direct duplicates",
+        icon="mdi:content-duplicate",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="packets",
+        value_fn=lambda data: _nested(data, "stats", "direct_dup_count"),
+    ),
     PyMCSensorDescription(
         key="repeater_version",
         translation_key="repeater_version",
@@ -255,6 +384,40 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
             "image_version": _nested(data, "stats", "image_version"),
             "node_name": get_repeater_name_from_stats(_nested(data, "stats") or {}),
         },
+    ),
+    PyMCSensorDescription(
+        key="radio_status",
+        translation_key="radio_status",
+        name="Radio status",
+        icon="mdi:radio-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        device_class=SensorDeviceClass.ENUM,
+        options=["ok", "degraded", "disabled"],
+        value_fn=_radio_status,
+        attrs_fn=lambda data: {"radio_error": _radio_error(data)},
+    ),
+    PyMCSensorDescription(
+        key="radio_stack_mode",
+        translation_key="radio_stack_mode",
+        name="Radio stack mode",
+        icon="mdi:radio-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _radio_stack(data).get("mode"),
+        attrs_fn=lambda data: {
+            "radio_ids": _configured_radio_ids(data),
+            "default_radio": _radio_stack(data).get("default_radio"),
+            "tx_mode": _radio_stack(data).get("tx_mode"),
+            "fabric": _radio_stack(data).get("fabric"),
+        },
+    ),
+    PyMCSensorDescription(
+        key="configured_radio_count",
+        translation_key="configured_radio_count",
+        name="Configured radio count",
+        icon="mdi:counter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: len(_configured_radio_ids(data)),
     ),
     PyMCSensorDescription(
         key="update_latest_version",
@@ -679,6 +842,20 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
         },
     ),
     PyMCSensorDescription(
+        key="mqtt_neighbors_phase",
+        translation_key="mqtt_neighbors_phase",
+        name="MQTT neighbors phase",
+        icon="mdi:access-point-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: _mqtt_neighbors_status(data).get("phase"),
+        attrs_fn=lambda data: {
+            "seconds_until_next": _mqtt_neighbors_status(data).get("secs_until_next"),
+            "last_result": _mqtt_neighbors_status(data).get("last_result"),
+            "last_publish_at": _mqtt_neighbors_status(data).get("last_publish_at"),
+            "interval_hours": _mqtt_neighbors_status(data).get("interval_hours"),
+        },
+    ),
+    PyMCSensorDescription(
         key="running_companion_bridges",
         name="Running companion bridges",
         icon="mdi:account-link",
@@ -865,6 +1042,42 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
             "rrd_enabled": _nested(data, "db_stats", "rrd_enabled"),
             "rrd_available": _nested(data, "db_stats", "rrd_available"),
         },
+    ),
+    PyMCSensorDescription(
+        key="plugins_installed",
+        translation_key="plugins_installed",
+        name="Installed plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "installed"),
+    ),
+    PyMCSensorDescription(
+        key="plugins_enabled",
+        translation_key="plugins_enabled",
+        name="Enabled plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "enabled"),
+    ),
+    PyMCSensorDescription(
+        key="plugins_running",
+        translation_key="plugins_running",
+        name="Running plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "running"),
+    ),
+    PyMCSensorDescription(
+        key="plugins_failed",
+        translation_key="plugins_failed",
+        name="Failed plugins",
+        icon="mdi:puzzle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: _nested(data, "plugin_summary", "failed"),
     ),
     PyMCSensorDescription(
         key="neighbor_link_count",
@@ -1211,6 +1424,8 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
+    from .monitoring_entities import setup_monitoring_sensors
+    setup_monitoring_sensors(entry, coordinator, async_add_entities)
     async_add_entities(entities)
     add_external_sensor_entities()
     entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
@@ -1445,7 +1660,11 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
 
     _UNIT_HINTS = {
         "battery_percent": PERCENTAGE,
+        "battery_percentage": PERCENTAGE,
         "humidity_pct": PERCENTAGE,
+        "voltage_v": "V",
+        "voltage_mv": "mV",
+        "battery_voltage_v": "V",
         "bus_voltage_v": "V",
         "shunt_voltage_v": "V",
         "battery_voltage_mv": "mV",
@@ -1460,14 +1679,35 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
         "time_to_empty_min": UnitOfTime.MINUTES,
         "time_to_full_min": UnitOfTime.MINUTES,
         "temperature_c": "°C",
+        "die_temperature_c": "°C",
         "temperature_f": "°F",
+        "pressure_hpa": "hPa",
+        "last_rssi_dbm": "dBm",
+        "last_snr_db": "dB",
+        "noise_floor_dbm": "dBm",
+        "frequency_hz": "Hz",
+        "frequency_mhz": "MHz",
+        "bandwidth_hz": "Hz",
+        "bandwidth_khz": "kHz",
+        "tx_power_dbm": "dBm",
+        "altitude_m": "m",
+        "speed_kmh": "km/h",
+        "course_degrees": "°",
+        "solar_charge_rate_percent_per_hour": "%/h",
     }
     _ICON_HINTS = {
         "battery_percent": "mdi:battery",
         "charge_state": "mdi:battery-sync-outline",
         "temperature_c": "mdi:thermometer",
+        "die_temperature_c": "mdi:thermometer",
         "temperature_f": "mdi:thermometer",
         "humidity_pct": "mdi:water-percent",
+        "pressure_hpa": "mdi:gauge",
+        "current_ma": "mdi:current-dc",
+        "power_mw": "mdi:flash",
+        "last_rssi_dbm": "mdi:signal",
+        "last_snr_db": "mdi:signal",
+        "noise_floor_dbm": "mdi:waveform",
     }
 
     def __init__(
@@ -1490,6 +1730,7 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
         )
         self._attr_icon = self._ICON_HINTS.get(field, "mdi:chip")
         self._attr_native_unit_of_measurement = self._UNIT_HINTS.get(field)
+        self._attr_device_class = measurement_class(field) if self._attr_native_unit_of_measurement else None
         self._attr_state_class = (
             SensorStateClass.MEASUREMENT if self._attr_native_unit_of_measurement else None
         )
@@ -1505,14 +1746,26 @@ class PyMCExternalSensorMetricSensor(PyMCBaseEntity, SensorEntity):
     @property
     def available(self) -> bool:
         reading = self._get_reading()
-        payload = reading.get("data") if isinstance(reading, dict) else None
-        return super().available and isinstance(payload, dict) and self._field in payload
+        payload = _external_sensor_payload(reading) if isinstance(reading, dict) else {}
+        if (not super().available or self._field not in payload
+                or not reading_usable(reading or {}, _nested(self.coordinator.data, "stats", "sensors", "poll_interval_seconds"))):
+            return False
+        return (
+            _normalize_external_sensor_value(
+                payload.get(self._field),
+                has_unit=self._attr_native_unit_of_measurement is not None,
+            )
+            is not None
+        )
 
     @property
     def native_value(self) -> Any:
         reading = self._get_reading() or {}
-        payload = reading.get("data") or {}
-        return payload.get(self._field) if isinstance(payload, dict) else None
+        payload = _external_sensor_payload(reading)
+        return _normalize_external_sensor_value(
+            payload.get(self._field),
+            has_unit=self._attr_native_unit_of_measurement is not None,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

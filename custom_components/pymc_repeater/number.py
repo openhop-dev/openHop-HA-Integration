@@ -9,11 +9,24 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .sensor import PyMCBaseEntity, _nested
+
+
+async def _async_set_flood_advert_interval(api: Any, value: float) -> object:
+    """Set the flood advert interval using the Repeater's disjoint bounds."""
+    hours = int(value)
+    if hours != 0 and not 3 <= hours <= 168:
+        raise HomeAssistantError(
+            "Flood advert interval must be 0 (off) or 3-168 hours"
+        )
+    return await api.async_update_radio_config(
+        {"flood_advert_interval_hours": hours}
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,9 +43,42 @@ class PyMCNumberDescription:
     mode: NumberMode
     value_fn: Callable[[dict[str, Any]], float | int | None]
     set_fn: Callable[[object, float], Awaitable[object]]
+    translation_key: str | None = None
 
 
 NUMBERS: tuple[PyMCNumberDescription, ...] = (
+    PyMCNumberDescription(
+        key="flood_advert_interval_hours",
+        translation_key="flood_advert_interval_hours",
+        name="Flood advert interval",
+        icon="mdi:timer-sync-outline",
+        min_value=0,
+        max_value=168,
+        step=1,
+        unit=UnitOfTime.HOURS,
+        mode=NumberMode.BOX,
+        value_fn=lambda data: _nested(
+            data, "stats", "config", "repeater", "send_advert_interval_hours"
+        ),
+        set_fn=_async_set_flood_advert_interval,
+    ),
+    PyMCNumberDescription(
+        key="direct_advert_interval_hours",
+        translation_key="direct_advert_interval_hours",
+        name="Direct advert interval",
+        icon="mdi:timer-outline",
+        min_value=0,
+        max_value=168,
+        step=1,
+        unit=UnitOfTime.HOURS,
+        mode=NumberMode.BOX,
+        value_fn=lambda data: _nested(
+            data, "stats", "config", "repeater", "direct_advert_interval_hours"
+        ),
+        set_fn=lambda api, value: api.async_update_radio_config(
+            {"direct_advert_interval_hours": int(value)}
+        ),
+    ),
     PyMCNumberDescription(
         key="max_airtime_percent",
         name="Max airtime percent",
@@ -298,7 +344,10 @@ class PyMCNumberEntity(PyMCBaseEntity, NumberEntity):
         super().__init__(entry, coordinator)
         self._api = api
         self.description = description
-        self._attr_name = description.name
+        if description.translation_key:
+            self._attr_translation_key = description.translation_key
+        else:
+            self._attr_name = description.name
         self._attr_icon = description.icon
         self._attr_native_min_value = description.min_value
         self._attr_native_max_value = description.max_value

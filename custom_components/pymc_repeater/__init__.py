@@ -13,12 +13,23 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import DeviceEntry
 
-from .api import PyMCRepeaterApiClient, get_repeater_name_from_stats
+from .api import PyMCRepeaterApiClient, PyMCRepeaterError, get_repeater_name_from_stats
 from .const import CONF_API_TOKEN, DOMAIN
 from .coordinator import PyMCRepeaterDataUpdateCoordinator
+from .radio_lifecycle import RadioLifecycle
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
+) -> bool:
+    """Allow operator removal only of a confirmed absent radio child."""
+    lifecycle = hass.data.get(DOMAIN, {}).get(config_entry.entry_id, {}).get("radio_lifecycle")
+    return lifecycle is not None and lifecycle.can_remove(device_entry)
 
 PLATFORMS: list[Platform] = [
+    Platform.UPDATE,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
@@ -28,6 +39,10 @@ PLATFORMS: list[Platform] = [
 ]
 
 SERVICE_PING_NEIGHBOR = "ping_neighbor"
+SERVICE_SEND_ADVERT = "send_advert"
+SERVICE_PUBLISH_NEIGHBORS = "publish_neighbors"
+SERVICE_GET_NEIGHBOR_SCOPES = "get_neighbor_scopes"
+SERVICE_QUERY_NEIGHBOR_SCOPES = "query_neighbor_scopes"
 SERVICE_ROOM_POST_MESSAGE = "room_post_message"
 SERVICE_ROOM_MESSAGES_CLEAR = "room_messages_clear"
 SERVICE_CAD_CALIBRATION_START = "cad_calibration_start"
@@ -89,12 +104,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if repeater_name and repeater_name != entry.title:
         hass.config_entries.async_update_entry(entry, title=repeater_name)
 
+    lifecycle = RadioLifecycle(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "api": api,
         "coordinator": coordinator,
+        "radio_lifecycle": lifecycle,
         "unsub_options_listener": entry.add_update_listener(_async_update_listener),
     }
 
+    lifecycle.async_start()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -153,7 +171,10 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     ) -> None:
         entry_id = _resolve_entry_id(hass, call.data)
         api: PyMCRepeaterApiClient = hass.data[DOMAIN][entry_id]["api"]
-        await func(api, entry_id)
+        try:
+            await func(api, entry_id)
+        except PyMCRepeaterError as err:
+            raise HomeAssistantError(str(err)) from err
         if refresh:
             await _async_refresh_entry(hass, entry_id)
 
@@ -166,7 +187,10 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     ) -> ServiceResponse | None:
         entry_id = _resolve_entry_id(hass, call.data)
         api: PyMCRepeaterApiClient = hass.data[DOMAIN][entry_id]["api"]
-        result = await func(api, entry_id)
+        try:
+            result = await func(api, entry_id)
+        except PyMCRepeaterError as err:
+            raise HomeAssistantError(str(err)) from err
         if refresh:
             await _async_refresh_entry(hass, entry_id)
         if not always_return and not getattr(call, "return_response", False):
@@ -190,9 +214,67 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("target_id"): str,
-                vol.Optional("timeout", default=10): vol.Coerce(int),
+                vol.Optional("timeout", default=10): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=60)
+                ),
             }
         ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEND_ADVERT,
+        lambda call: _with_api(
+            call,
+            lambda api, _: api.async_send_advert(call.data.get("mode", "flood")),
+            refresh=False,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("mode", default="flood"): vol.In(["flood", "direct"]),
+            }
+        ),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PUBLISH_NEIGHBORS,
+        lambda call: _with_api(
+            call,
+            lambda api, _: api.async_publish_neighbors(),
+            refresh=True,
+        ),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_NEIGHBOR_SCOPES,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_neighbor_scopes(),
+            always_return=True,
+        ),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_QUERY_NEIGHBOR_SCOPES,
+        lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_query_neighbor_scopes(call.data["pubkey"]),
+            always_return=True,
+        ),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Required("pubkey"): vol.Match(r"(?i)^[0-9a-f]{64}$"),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
     )
 
     hass.services.async_register(
@@ -463,7 +545,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_REQUEST_STATUS,
-        lambda call: _with_api(
+        lambda call: _with_api_response(
             call,
             lambda api, _: api.async_companion_request_status(
                 pub_key=call.data["pub_key"],
@@ -476,16 +558,19 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("pub_key"): str,
-                vol.Optional("timeout", default=15.0): vol.Coerce(float),
+                vol.Optional("timeout", default=15.0): vol.All(
+                    vol.Coerce(float), vol.Range(min=1, max=120)
+                ),
                 vol.Optional("companion_name"): str,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_REQUEST_TELEMETRY,
-        lambda call: _with_api(
+        lambda call: _with_api_response(
             call,
             lambda api, _: api.async_companion_request_telemetry(
                 pub_key=call.data["pub_key"],
@@ -501,13 +586,16 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("pub_key"): str,
-                vol.Optional("timeout", default=20.0): vol.Coerce(float),
+                vol.Optional("timeout", default=20.0): vol.All(
+                    vol.Coerce(float), vol.Range(min=1, max=120)
+                ),
                 vol.Optional("companion_name"): str,
                 vol.Optional("want_base", default=True): bool,
                 vol.Optional("want_location", default=True): bool,
                 vol.Optional("want_environment", default=True): bool,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     hass.services.async_register(
@@ -726,6 +814,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 path_hash_size=call.data["path_hash_size"],
                 hours=call.data.get("hours", 24),
                 limit=call.data.get("limit", 1000),
+                bucket_seconds=call.data.get("bucket_seconds"),
             ),
             always_return=True,
         ),
@@ -733,6 +822,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("peer_hash"): str,
+                vol.Optional("bucket_seconds"): vol.All(
+                    vol.Coerce(int), vol.Range(min=60)
+                ),
                 vol.Required("path_hash_size"): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=3)
                 ),

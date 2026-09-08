@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 import logging
 from typing import Any
 
@@ -26,6 +27,7 @@ from .api import (
 from .const import (
     CONF_API_TOKEN,
     CONF_DATA_SIZE_UNIT,
+    CONF_RADIO_ID_ALIASES,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN_ID,
     CONF_TOKEN_NAME,
@@ -40,6 +42,7 @@ from .const import (
     MIN_SCAN_INTERVAL_SECONDS,
     UPTIME_UNITS,
 )
+from .monitoring import parse_radio_aliases, radio_source_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -201,8 +204,22 @@ class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the integration options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            entry_data = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id, {})
+            coordinator = entry_data.get("coordinator")
+            radio_ids = radio_source_ids(getattr(coordinator, "data", None) or {})
+            try:
+                aliases = parse_radio_aliases(
+                    user_input.get(CONF_RADIO_ID_ALIASES, self._config_entry.options.get(CONF_RADIO_ID_ALIASES, {})),
+                    radio_ids=radio_ids,
+                )
+            except ValueError:
+                errors[CONF_RADIO_ID_ALIASES] = "invalid_radio_aliases"
+            else:
+                return self.async_create_entry(title="", data={
+                    **self._config_entry.options, **user_input, CONF_RADIO_ID_ALIASES: aliases,
+                })
 
         current_unit = self._config_entry.options.get(CONF_UPTIME_UNIT, DEFAULT_UPTIME_UNIT)
         current_data_size_unit = self._config_entry.options.get(
@@ -211,8 +228,13 @@ class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
         current_scan_interval = self._config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS
         )
+        current_aliases = self._config_entry.options.get(CONF_RADIO_ID_ALIASES, {})
+        alias_text = current_aliases if isinstance(current_aliases, str) else json.dumps(current_aliases)
+        if user_input is not None:
+            alias_text = user_input.get(CONF_RADIO_ID_ALIASES, alias_text)
         schema = vol.Schema(
             {
+                vol.Optional(CONF_RADIO_ID_ALIASES, default=alias_text): str,
                 vol.Required(CONF_DATA_SIZE_UNIT, default=current_data_size_unit): vol.In(
                     DATA_SIZE_UNITS
                 ),
@@ -229,4 +251,4 @@ class PyMCRepeaterOptionsFlow(config_entries.OptionsFlow):
                 ),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
