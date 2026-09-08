@@ -7,7 +7,7 @@ from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, Sen
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
-from .const import DOMAIN, MANUFACTURER
+from .const import CONF_RADIO_ID_ALIASES, DOMAIN, MANUFACTURER
 from .monitoring import RADIO_FIELDS, charge_state, plugin_problem, radio_inventory, reading_age, reading_stale
 from .sensor import PyMCBaseEntity, _external_sensor_identity, _external_sensor_readings, _nested
 
@@ -26,7 +26,10 @@ def _snapshot(coordinator, binary: bool) -> dict:
             )
     else:
         values[("component", "api", "last_success")] = getattr(coordinator, "last_successful_poll", None)
-        for radio_id, radio in radio_inventory(data).items():
+        entry = getattr(coordinator, "config_entry", None)
+        aliases = entry.options.get(CONF_RADIO_ID_ALIASES, {}) if entry is not None else {}
+        # Invalid stored values fail closed, never create replacement identities.
+        for radio_id, radio in radio_inventory(data, aliases).items():
             values[("radio", radio_id, "inventory")] = radio.get("type", "configured")
             for field in RADIO_FIELDS:
                 if field in radio:

@@ -4,6 +4,9 @@
 
 ## 1.2.0
 
+- added automatic retirement and restoration of removed radio devices while preserving custom names and registry IDs, with safe explicit removal of confirmed absent radios
+- added explicit radio ID aliases to preserve existing Home Assistant radio devices, custom names, and entity IDs when a repeater's runtime radio ID changes
+- added scheduled repeater update checks at one minute past each hour in Home Assistant's timezone, respecting active checks, installations, and GitHub rate-limit holds without fetching branch lists
 - added repeater-wide flood/direct received, transmitted, and duplicate packet counters using existing stats polling, with restart-aware totals and dashboard rows
 - added radio child devices with read-only frequency, bandwidth, TX power, spreading factor, coding rate, and preamble settings while preserving existing entity IDs and single-radio support
 - added component-health diagnostics, last successful poll, source age, and stale-reading indicators; stale, failed, or invalid measurements become unavailable

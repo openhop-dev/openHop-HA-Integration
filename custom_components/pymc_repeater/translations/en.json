@@ -37,9 +37,16 @@
         "data": {
           "data_size_unit": "Data size display unit",
           "uptime_unit": "System uptime display unit",
-          "scan_interval": "Integration refresh interval (seconds)"
+          "scan_interval": "Integration refresh interval (seconds)",
+          "radio_id_aliases": "Radio ID aliases (JSON)"
+        },
+        "data_description": {
+          "radio_id_aliases": "Explicitly map a renamed runtime radio ID to its previous Home Assistant radio ID, for example {\"local\": \"radio0\"}. Use only after confirming it is the same physical radio; IDs are case-sensitive, not device names. Use {} for no aliases. IDs must be nonempty strings without whitespace. Targets must be unique, must not be current runtime IDs, and must not also be alias sources (no chains or cycles). Missing sources become unavailable; runtime conflicts are suppressed. Saving reloads the integration; this does not delete existing duplicate devices or entities."
         }
       }
+    },
+    "error": {
+      "invalid_radio_aliases": "Enter a JSON object mapping runtime IDs to previous Home Assistant IDs. Use unique nonempty strings without whitespace, no duplicate keys or targets, and no chains, cycles, or targets already used by runtime radios. Use {} to clear aliases."
     }
   },
   "entity": {

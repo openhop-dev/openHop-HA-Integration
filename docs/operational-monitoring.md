@@ -18,6 +18,34 @@ Genuine per-radio traffic/health sensors remain
 unsupported until a verified per-radio telemetry contract exists. Quiet RF is
 not a failure signal.
 
+## Preserving radio names after a backend ID change
+
+Renaming a radio device in Home Assistant does not change its identity. If the
+Repeater configuration changes the radio ID itself, use **Radio ID aliases (JSON)**
+in the integration options to associate the new runtime ID with the existing HA
+identity. For example, `{"local": "radio0"}` feeds runtime radio `local` into the
+existing `radio0` device and entities, preserving their custom names and IDs.
+Other radios remain separate. The same mapping also permits the original
+`radio0` ID when `local` is absent, so returning to single-radio mode preserves
+that device too. Use `{}` to clear aliases. Only map radios whose physical
+identity you have confirmed; mappings are not inferred from frequency, list
+position, or display names. Duplicate targets, chains, cycles, and simultaneous
+source/target ID collisions are rejected.
+
+After two distinct successful full polls confirm a radio is absent, its device is
+disabled by the integration rather than deleted. HA disables its associated
+entities while retaining custom names, device/entity IDs, and history. When the
+canonical radio returns, integration-disabled devices are restored; user-disabled
+devices and entities are left alone. Removed radios can still be found by showing
+disabled devices. Explicit permanent removal is allowed only for confirmed absent
+radio children, never active radios or the parent Repeater. Permanent removal does
+not preserve registry identity for later re-addition.
+
+Failed or malformed radio inventories, ambiguous aliases, and empty inventories
+never retire devices. Unrelated optional endpoint errors, such as a GitHub
+rate-limit error, do not invalidate a healthy radio inventory. GPS notifications
+do not count as additional full polls.
+
 ## Aggregate traffic counters
 
 Six traffic sensors belong to the parent Repeater device: flood/direct packets
@@ -80,8 +108,11 @@ remains unknown rather than claiming the installed version is up to date. A
 confirmed result requires a completed check state, a valid check timestamp and
 version data, and no reported error. An unconfirmed result cannot enable native
 update installation.
-It never automatically checks external release services, switches channel, or
-installs anything. Explicit Home Assistant `update.install` requests call the
+The entity itself never switches channel or installs automatically. The coordinator
+requests a non-forced update check at `HH:01:00` in HA's configured timezone,
+respecting backend rate-limit holds and skipping active checks/installations.
+There is no immediate startup check or automatic branch-list discovery.
+Explicit Home Assistant `update.install` requests call the
 existing install API with `force=false`. Version selection and backup requests
 are rejected; only a confirmed available update without a status error is
 installable. No progress percentage is invented. The existing update actions,

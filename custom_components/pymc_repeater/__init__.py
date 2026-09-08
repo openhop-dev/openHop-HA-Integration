@@ -13,10 +13,20 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .api import PyMCRepeaterApiClient, get_repeater_name_from_stats
 from .const import CONF_API_TOKEN, DOMAIN
 from .coordinator import PyMCRepeaterDataUpdateCoordinator
+from .radio_lifecycle import RadioLifecycle
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, config_entry: ConfigEntry, device_entry: DeviceEntry
+) -> bool:
+    """Allow operator removal only of a confirmed absent radio child."""
+    lifecycle = hass.data.get(DOMAIN, {}).get(config_entry.entry_id, {}).get("radio_lifecycle")
+    return lifecycle is not None and lifecycle.can_remove(device_entry)
 
 PLATFORMS: list[Platform] = [
     Platform.UPDATE,
@@ -94,12 +104,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if repeater_name and repeater_name != entry.title:
         hass.config_entries.async_update_entry(entry, title=repeater_name)
 
+    lifecycle = RadioLifecycle(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "api": api,
         "coordinator": coordinator,
+        "radio_lifecycle": lifecycle,
         "unsub_options_listener": entry.add_update_listener(_async_update_listener),
     }
 
+    lifecycle.async_start()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

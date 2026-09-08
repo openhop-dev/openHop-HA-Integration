@@ -1,7 +1,9 @@
 """Conservative monitoring normalization independent of Home Assistant."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
+import json
 from math import isfinite
 from time import time
 from typing import Any
@@ -78,25 +80,95 @@ def plugin_problem(plugin: dict) -> bool | None:
     return None
 
 
-def radio_inventory(data: dict) -> dict[str, dict]:
+def parse_radio_aliases(value: Any, *, radio_ids: Iterable[str] = ()) -> dict[str, str]:
+    """Validate explicit runtime-ID -> HA-ID aliases without normalizing IDs.
+
+    Chains (including self aliases/cycles), duplicate keys/targets, and alias
+    pairs whose source and target are both declared at runtime are rejected.
+    Empty objects disable aliasing; invalid persisted values must fail closed.
+    """
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result = {}
+        for key, target in pairs:
+            if key in result:
+                raise ValueError("Duplicate radio alias source")
+            result[key] = target
+        return result
+
+    if isinstance(value, str):
+        try:
+            value = json.loads(value, object_pairs_hook=unique_object)
+        except (ValueError, RecursionError) as err:
+            raise ValueError("Invalid radio alias JSON") from err
+    if not isinstance(value, dict):
+        raise ValueError("Radio aliases must be an object")
+    for source, target in value.items():
+        for identity in (source, target):
+            if (not isinstance(identity, str) or not identity or not identity.isprintable()
+                    or any(char.isspace() for char in identity)):
+                raise ValueError("Radio IDs must be nonempty strings without whitespace")
+    targets = set(value.values())
+    if len(targets) != len(value) or targets.intersection(value):
+        raise ValueError("Radio aliases must be one-to-one without chains or cycles")
+    occupied = set(radio_ids)
+    if any(source in occupied and target in occupied for source, target in value.items()):
+        raise ValueError("Radio alias source and target are both runtime IDs")
+    return dict(value)
+
+
+_NO_RADIO_ALIASES = object()
+
+
+def radio_source_ids(data: dict) -> set[str]:
+    """Return all declared runtime IDs, including ambiguous rows, for safety."""
+    stats = data.get("stats")
+    if not isinstance(stats, dict):
+        return set()
+    stack = stats.get("radio_stack")
+    ids = stack.get("radio_ids") if isinstance(stack, dict) else None
+    result = {rid for rid in ids if isinstance(rid, str) and rid} if isinstance(ids, list) else set()
+    rows = stats.get("radios")
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict):
+            result.update(value for key in ("id", "radio_id")
+                          if isinstance(value := row.get(key), str) and value)
+    return result
+
+
+def radio_inventory(data: dict, aliases: Any = _NO_RADIO_ALIASES) -> dict[str, dict]:
     """Expose allowlisted radio configuration, not aggregate health or traffic.
 
     Installed /api/stats radios[] is configuration, NOT per-radio telemetry.
     """
     stats = data.get("stats")
-    if not isinstance(stats, dict) or stats.get("error"):
+    if not isinstance(stats, dict) or stats.get("error") or stats.get("success") is False:
         return {}
     stack = stats.get("radio_stack")
     stack = stack if isinstance(stack, dict) else {}
     ids = stack.get("radio_ids")
-    result = {rid: {} for rid in ids if isinstance(rid, str) and rid} if isinstance(ids, list) else {}
+    result: dict[str, dict] = {}
+    ambiguous = set()
+    for rid in ids if isinstance(ids, list) else []:
+        if not isinstance(rid, str) or not rid:
+            continue
+        if rid in result:
+            ambiguous.add(rid)
+        result[rid] = {}
     rows = stats.get("radios")
+    seen_rows = set()
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
+            continue
+        if "id" in row and "radio_id" in row and row["id"] != row["radio_id"]:
+            ambiguous.update(value for value in (row["id"], row["radio_id"]) if isinstance(value, str))
             continue
         rid = row.get("id") or row.get("radio_id")
         if not isinstance(rid, str) or not rid:
             continue
+        if rid in seen_rows:
+            ambiguous.add(rid)
+            continue
+        seen_rows.add(rid)
         result.setdefault(rid, {})
         if isinstance(row.get("type"), str):
             result[rid]["type"] = row["type"]
@@ -118,7 +190,24 @@ def radio_inventory(data: dict) -> dict[str, dict]:
                 value = finite_number(settings.get(field))
                 if value is not None:
                     result[default].setdefault(field, value)
-    return result
+    try:
+        mapping = parse_radio_aliases({} if aliases is _NO_RADIO_ALIASES else aliases)
+    except ValueError:
+        return {}
+    # An explicit alias joins two alternate names for the same identity. The
+    # canonical name remains valid when the alias source disappears (for example
+    # multi -> single mode). Only simultaneous declarations are a collision;
+    # include malformed/ambiguous rows so they cannot bypass that protection.
+    occupied = radio_source_ids(data)
+    conflicts = {
+        rid for source, target in mapping.items()
+        if source in occupied and target in occupied
+        for rid in (source, target)
+    }
+    return {
+        mapping.get(rid, rid): radio for rid, radio in result.items()
+        if rid not in ambiguous and rid not in conflicts
+    }
 
 
 def measurement_class(field: str) -> str | None:

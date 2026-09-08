@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 import json
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
@@ -56,19 +58,61 @@ class PyMCRepeaterDataUpdateCoordinator(DataUpdateCoordinator[dict]):
         self.api = api
         self.last_successful_poll: datetime | None = None
         self._gps_stream_task: asyncio.Task | None = None
+        self._unsub_update_check: Callable[[], None] | None = None
+        self._update_check_running = False
+        entry.async_on_unload(self._async_cancel_update_check)
 
     async def async_start_runtime(self) -> None:
         """Start background runtime tasks."""
+        if self._unsub_update_check is None:
+            # HA's local-time helper owns timezone/DST handling; omitted hour
+            # matches every hour. Registration does not check immediately.
+            self._unsub_update_check = async_track_time_change(
+                self.hass, self._async_hourly_update_check, minute=1, second=0
+            )
         if self._gps_stream_task is None:
             self._gps_stream_task = self.hass.async_create_task(self._async_gps_stream_loop())
 
     async def async_stop_runtime(self) -> None:
         """Stop background runtime tasks."""
+        self._async_cancel_update_check()
         if self._gps_stream_task is not None:
             self._gps_stream_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._gps_stream_task
             self._gps_stream_task = None
+
+    @callback
+    def _async_cancel_update_check(self) -> None:
+        """Remove the hourly listener on stop, unload, or setup failure."""
+        if self._unsub_update_check is not None:
+            self._unsub_update_check()
+            self._unsub_update_check = None
+
+    async def _async_hourly_update_check(self, now: datetime) -> None:
+        """Request a cache-respecting version check, not branch discovery."""
+        if self._unsub_update_check is None or self._update_check_running:
+            return
+        status = (self.data or {}).get("update_status")
+        if isinstance(status, dict) and status.get("state") in ("installing", "checking"):
+            return
+
+        self._update_check_running = True
+        try:
+            try:
+                # The backend's 10-minute cache expires between hourly checks;
+                # force=False also preserves its GitHub rate-limit backoff.
+                await self.api.async_update_check(force=False)
+            except Exception as err:
+                _LOGGER.warning("Hourly update check failed: %s", err)
+            if self._unsub_update_check is not None:
+                try:
+                    # Read cached status once; normal polling observes completion.
+                    await self.async_request_refresh()
+                except Exception as err:
+                    _LOGGER.warning("Refresh after hourly update check failed: %s", err)
+        finally:
+            self._update_check_running = False
 
     async def _async_update_data(self) -> dict:
         try:
