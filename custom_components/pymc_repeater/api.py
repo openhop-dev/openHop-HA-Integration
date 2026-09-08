@@ -166,7 +166,6 @@ class PyMCRepeaterApiClient:
             "transport_keys": self.async_get_transport_keys(),
             "room_stats": self.async_get_room_stats(),
             "update_status": self.async_get_update_status(),
-            "update_channels": self.async_get_update_channels(),
             "companions": self.async_get_companions(),
             "gps": self.async_get_gps(),
             "packet_type_stats": self.async_get_packet_type_stats(),
@@ -380,7 +379,7 @@ class PyMCRepeaterApiClient:
         return await self._async_request_wrapped("GET", "/api/update/status")
 
     async def async_get_update_channels(self) -> dict[str, Any]:
-        """Return available repeater update channels."""
+        """Return available repeater update channels on explicit request only."""
         return await self._async_request_wrapped("GET", "/api/update/channels")
 
     async def async_get_companions(self) -> list[dict[str, Any]]:

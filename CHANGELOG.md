@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- Six repeater-wide flood/direct received, transmitted, and duplicate packet counters using existing stats polling, with restart-aware totals and comprehensive dashboard rows.
+
+### Changed
+
+- Show readable software-update dashboard status, including GitHub Limited, Not checked, Up to date, Update available, Checking, Installing, and Check failed, while preserving explicit check/install controls.
+
+### Fixed
+
+- Remove GitHub-backed update-channel discovery from automatic polling. Continue reading cached local update status and preserve explicit user-triggered update checks without slowing normal telemetry.
+- Preserve unknown native update state before a successful update check instead of reporting the installed version as up to date.
+
 ## 1.2.0
 
 ### Added

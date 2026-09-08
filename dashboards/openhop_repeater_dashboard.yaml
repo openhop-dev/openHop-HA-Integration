@@ -240,11 +240,32 @@ sections:
   cards:
   - type: vertical-stack
     cards:
-    - type: tile
-      entity: update.REPEATER_SLUG_repeater_software
-      name: Software update
-      tap_action:
-        action: more-info
+    - type: markdown
+      title: Software update
+      content: |
+        {% set status = states('sensor.REPEATER_SLUG_update_state') %}
+        {% set error = state_attr('sensor.REPEATER_SLUG_update_state', 'error') or '' %}
+        {% set checked = state_attr('sensor.REPEATER_SLUG_update_state', 'last_checked') %}
+        {% set update = states('update.REPEATER_SLUG_repeater_software') %}
+        {% if is_state('binary_sensor.REPEATER_SLUG_component_api_connected', 'off') %}
+        Repeater disconnected
+        {% elif status == 'installing' %}
+        Installing
+        {% elif status == 'checking' %}
+        Checking
+        {% elif 'github' in (error | lower) and 'rate limit' in (error | lower) %}
+        GitHub Limited
+        {% elif error or status == 'error' %}
+        Check failed
+        {% elif not checked %}
+        Not checked
+        {% elif update == 'on' %}
+        Update available
+        {% elif update == 'off' %}
+        Up to date
+        {% else %}
+        Status unavailable
+        {% endif %}
     - type: entities
       title: Update Management
       state_color: true
@@ -525,6 +546,20 @@ sections:
         name: Current Airtime
       - entity: sensor.REPEATER_SLUG_average_score_24h
         name: Avg Score 24h
+      - type: section
+        label: Aggregate counters · since process start
+      - entity: sensor.REPEATER_SLUG_flood_packets_received
+        name: Flood packets received
+      - entity: sensor.REPEATER_SLUG_direct_packets_received
+        name: Direct packets received
+      - entity: sensor.REPEATER_SLUG_flood_packets_transmitted
+        name: Flood packets transmitted
+      - entity: sensor.REPEATER_SLUG_direct_packets_transmitted
+        name: Direct packets transmitted
+      - entity: sensor.REPEATER_SLUG_flood_duplicates
+        name: Flood duplicates
+      - entity: sensor.REPEATER_SLUG_direct_duplicates
+        name: Direct duplicates
     grid_options:
       columns: full
       rows: auto

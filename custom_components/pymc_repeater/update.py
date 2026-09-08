@@ -1,6 +1,8 @@
 """Native firmware update entity using cached status and explicit installation."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.exceptions import HomeAssistantError
 
@@ -34,20 +36,35 @@ class PyMCUpdateEntity(PyMCBaseEntity, UpdateEntity):
     def available(self) -> bool:
         return (super().available and not self._status.get("error")
                 and self._status.get("success") is not False
+                and self._status.get("state") != "error"
                 and isinstance(self._status.get("has_update"), bool)
-                and bool(self.installed_version) and bool(self.latest_version))
+                and bool(self.installed_version))
 
     @property
     def installed_version(self) -> str | None:
         value = self._status.get("current_version")
-        return value if isinstance(value, str) and value else None
+        return value if isinstance(value, str) and value.strip() and value != "unknown" else None
 
     @property
     def latest_version(self) -> str | None:
-        if self._status.get("has_update") is False:
-            return self.installed_version
-        value = self._status.get("latest_version")
-        return value if isinstance(value, str) and value else None
+        # Startup, channel changes and forced checks reset the cached version.
+        # A false has_update alone is therefore not evidence of a successful check.
+        status = self._status
+        value = status.get("latest_version")
+        checked = status.get("last_checked")
+        if (status.get("state") not in ("idle", "complete")
+                or status.get("error") or status.get("success") is False
+                or not isinstance(status.get("has_update"), bool)
+                or not self.installed_version
+                or not isinstance(value, str) or not value.strip() or value == "unknown"
+                or not isinstance(checked, str)):
+            return None
+        try:
+            datetime.fromisoformat(checked)
+        except ValueError:
+            return None
+        # Trust the backend comparison, including when installed is ahead of latest.
+        return self.installed_version if status["has_update"] is False else value
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -57,7 +74,8 @@ class PyMCUpdateEntity(PyMCBaseEntity, UpdateEntity):
         """The API cannot select versions, back up HA, or report percentages."""
         if version is not None or backup:
             raise HomeAssistantError("Version selection and backups are not supported")
-        if not self.available or self._status.get("has_update") is not True:
+        if (not self.available or self.latest_version is None
+                or self._status.get("has_update") is not True):
             raise HomeAssistantError("No confirmed update is available")
         try:
             await self.coordinator.api.async_update_install(force=False)

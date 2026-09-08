@@ -26,6 +26,8 @@ This custom integration connects Home Assistant directly to the Repeater's local
 
 The integration uses coordinated local polling instead of making a separate API request for every entity. The polling interval is configurable in the integration options and defaults to 15 seconds.
 
+Automatic polling reads the Repeater's cached update status; it does not discover GitHub branches or initiate update checks. Use the **Check for updates** button (or the explicit update-check action) to request a fresh check. The channel selector uses `main`, `dev`, and the current channel without querying GitHub. The Repeater's own update-check behavior is unchanged.
+
 > [!NOTE]
 > The integration domain and folder remain `pymc_repeater` so existing installations and entity registry entries continue to work. The user-facing name is **openHop Repeater**.
 
@@ -196,6 +198,11 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 - [Issue tracker](https://github.com/openhop-dev/openHop-HA-Integration/issues)
 
 ## Operational monitoring
+
+Aggregate flood/direct received, transmitted, and duplicate packet counters are
+exposed on the parent Repeater device using existing stats polling. These are
+process-lifetime totals, not per-radio counters or hourly rates; missing values
+remain unknown.
 
 See [operational monitoring](docs/operational-monitoring.md) for radio child devices, source freshness and component diagnostics, native update installation safety, plugin health, battery units, alert blueprints, and the separate compact operations view.
 

@@ -44,6 +44,12 @@
   },
   "entity": {
     "sensor": {
+      "recv_flood_count": {"name": "Flood packets received"},
+      "recv_direct_count": {"name": "Direct packets received"},
+      "sent_flood_count": {"name": "Flood packets transmitted"},
+      "sent_direct_count": {"name": "Direct packets transmitted"},
+      "flood_dup_count": {"name": "Flood duplicates"},
+      "direct_dup_count": {"name": "Direct duplicates"},
       "plugins_installed": {"name": "Installed plugins"},
       "plugins_enabled": {"name": "Enabled plugins"},
       "plugins_running": {"name": "Running plugins"},

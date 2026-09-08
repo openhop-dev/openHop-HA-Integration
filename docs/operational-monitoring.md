@@ -18,6 +18,16 @@ Genuine per-radio traffic/health sensors remain
 unsupported until a verified per-radio telemetry contract exists. Quiet RF is
 not a failure signal.
 
+## Aggregate traffic counters
+
+Six traffic sensors belong to the parent Repeater device: flood/direct packets
+received, flood/direct packets transmitted, and flood/direct duplicates. They
+read existing `/api/stats` counters without additional requests. These are
+aggregate counters since the Repeater process started, not per-radio readings
+or hourly rates. They use `total_increasing` state class so Home Assistant can
+account for resets after a Repeater restart. Missing counters remain unknown,
+not zero. The comprehensive dashboard includes them in its traffic diagnostics.
+
 ## Freshness and component health
 
 One full polling schedule remains in use, alongside the existing independent GPS
@@ -65,6 +75,11 @@ Existing external-sensor IDs, including the modem compatibility alias, remain.
 ## Native update entity
 
 `Repeater software` uses the already-polled cached `/api/update/status` data.
+Before a successful check, including after a channel change, the latest version
+remains unknown rather than claiming the installed version is up to date. A
+confirmed result requires a completed check state, a valid check timestamp and
+version data, and no reported error. An unconfirmed result cannot enable native
+update installation.
 It never automatically checks external release services, switches channel, or
 installs anything. Explicit Home Assistant `update.install` requests call the
 existing install API with `force=false`. Version selection and backup requests
