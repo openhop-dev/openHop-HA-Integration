@@ -358,16 +358,17 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn("async_update_listeners()", coordinator)
         self.assertNotIn("async_set_updated_data", coordinator)
 
-    def test_release_metadata_and_changelog_are_v1_1_6(self) -> None:
+    def test_release_metadata_and_changelog_are_v1_2_0(self) -> None:
         manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         workflow = (ROOT / ".github/workflows/python-smoke.yaml").read_text(
             encoding="utf-8"
         )
 
-        self.assertEqual(manifest["version"], "1.1.6")
+        self.assertEqual(manifest["version"], "1.2.0")
         self.assertIn("## 1.1.6", changelog)
         self.assertIn("## Unreleased", changelog)
+        self.assertIn("## 1.2.0", changelog)
         for expected in (
             "15 seconds",
             "GPS stream",
