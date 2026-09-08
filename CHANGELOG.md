@@ -4,36 +4,28 @@
 
 ## 1.2.0
 
-### Added
-
-- Six repeater-wide flood/direct received, transmitted, and duplicate packet counters using existing stats polling, with restart-aware totals and comprehensive dashboard rows.
-- Radio child devices with supported read-only frequency, bandwidth, TX power, spreading factor, coding rate, and preamble settings; preserved existing entity IDs and single-radio compatibility.
-- Component-health diagnostics, last successful poll, source age and stale-reading indicators, with unavailable states for stale, failed, or invalid measurements.
-- Native Home Assistant update entity with explicit installation on the selected channel, while preserving existing update sensors, buttons, and actions.
-- Aggregate plugin counts and individual plugin version, state, enabled, running, and problem diagnostics without exposing plugin settings, filesystem paths, or repository metadata.
-- Battery, voltage, current, power, and temperature device classes for supported readings, including numeric-string normalization, BME280 pressure, and an additive modem battery-percentage alias.
-- Charging, discharging, and neutral battery trends derived from fresh signed charge-rate readings in `%/h`, without inferring electrical current or a full-battery state.
-- Seven opt-in alert blueprints for availability, MQTT disconnection, low battery, high temperature, stale readings, plugin failure, and available updates.
-- Optional `bucket_seconds` on the neighbor-history action, preserving raw rows when omitted.
-- MQTT neighbors publication status, a manual publication control, stored neighbor-scope retrieval, and one-neighbor scope queries.
-- Independent flood/direct advert controls and schedules, plus radio-stack mode and configured-radio-count diagnostics.
-
-### Changed
-
-- Show readable software-update dashboard status, including GitHub Limited, Not checked, Up to date, Update available, Checking, Installing, and Check failed, while preserving explicit check/install controls.
-- Redesigned the comprehensive built-in dashboard with a compact operational overview and trends first, controls next, and grouped diagnostics last. Responsive Sections and natural-height card stacks avoid stretched diagnostic cards; labels and badges are shortened and explicit.
-- Added a separate compact operations dashboard and documented replacement of dynamic entity IDs using the correct Repeater and its radio child devices.
-- Documented multi-radio `radio_id`, MQTT custom base topics, and neighbor-publisher fields on existing raw configuration actions.
-- Expanded diagnostics redaction and stopped retaining raw transport-key and private identity configuration in coordinator polling.
-- Expanded English translations and executable client, monitoring, update, and dashboard regression coverage.
-
-### Fixed
-
-- Remove GitHub-backed update-channel discovery from automatic polling. Continue reading cached local update status and preserve explicit user-triggered update checks without slowing normal telemetry.
-- Preserve unknown native update state before a successful update check instead of reporting the installed version as up to date.
-- Allowed neighbor-scope queries to wait through the Repeater's 45-second response window instead of using the normal 10-second API timeout.
-- Aligned flood advert interval validation with the Repeater's supported `0` or `3–168` hour values.
-- Made modem battery/solar percentage displays tolerate Home Assistant area prefixes and numeric entity-ID suffixes.
+- added repeater-wide flood/direct received, transmitted, and duplicate packet counters using existing stats polling, with restart-aware totals and dashboard rows
+- added radio child devices with read-only frequency, bandwidth, TX power, spreading factor, coding rate, and preamble settings while preserving existing entity IDs and single-radio support
+- added component-health diagnostics, last successful poll, source age, and stale-reading indicators; stale, failed, or invalid measurements become unavailable
+- added a native Home Assistant update entity with explicit installation on the selected channel while preserving existing update sensors, buttons, and actions
+- added aggregate plugin counts and individual version, state, enabled, running, and problem diagnostics without exposing settings, paths, or repository metadata
+- added battery, voltage, current, power, and temperature device classes, numeric-string normalization, BME280 pressure, and a modem battery-percentage alias
+- added charging, discharging, and neutral battery trends from fresh signed charge-rate readings in `%/h`, without inferring electrical current or a full-battery state
+- added seven opt-in alert blueprints for availability, MQTT disconnection, low battery, high temperature, stale readings, plugin failure, and available updates
+- added optional `bucket_seconds` to neighbor-history actions while preserving raw rows when omitted
+- added MQTT neighbor-publication status and controls, stored neighbor-scope retrieval, and one-neighbor scope queries
+- added independent flood/direct advert controls and schedules, radio-stack mode, and configured-radio-count diagnostics
+- added readable dashboard update status, including GitHub Limited, Not checked, Up to date, Update available, Checking, Installing, and Check failed, while retaining check/install controls
+- reorganized the comprehensive dashboard with overview and trends first, controls next, and grouped diagnostics last; responsive sections and natural-height stacks avoid stretched cards
+- added a compact operations dashboard and documented dynamic entity-ID replacement for repeaters and radio child devices
+- documented multi-radio `radio_id`, MQTT custom base topics, and neighbor-publisher fields on raw configuration actions
+- expanded diagnostics redaction and removed raw transport-key and private identity configuration from coordinator polling
+- expanded English translations and client, monitoring, update, and dashboard regression tests
+- removed GitHub-backed update-channel discovery from automatic polling while retaining cached local update status and manual checks
+- fixed the native update entity reporting up to date before a successful check; unchecked results remain unknown
+- increased neighbor-scope query timeout to cover the repeater's 45-second response window instead of the normal 10 seconds
+- aligned flood advert interval validation with the repeater's supported `0` or `3–168` hour values
+- fixed modem battery/solar percentage displays with Home Assistant area prefixes and numeric entity-ID suffixes
 
 ## 1.1.6
 
