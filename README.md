@@ -127,7 +127,80 @@ To use it:
 7. The modem percentage card automatically finds active battery and solar-rate entities even when Home Assistant adds an area prefix or numeric suffix.
 8. For other dynamic rows, replace the complete example entity ID with the active entity ID shown in your instance. If the external sensor is not named `modem`, also update `_sensor_modem_` in the percentage card's two match strings.
 
-The dashboard uses only built-in Home Assistant cards and the current Sections frontend (configuration saved and read back on HA 2026.9; rendered layout still needs browser verification). Full-width ordered bands put Live overview first, then short single-unit Recent trends, Operations, grouped Diagnostics, and Reference notes last. Three desktop columns collapse with the native responsive grid; dense placement is disabled so diagnostic cards cannot jump above the essentials. Each detail column is a native vertical stack in its own single-column section: short cards keep their natural height instead of stretching to the tallest neighboring card. Smaller cards share columns to reduce empty rows. The overview retains six key metrics plus optional battery/temperature; secondary metrics remain in diagnostics. Badges explicitly show their names, GPS stays in diagnostics, and the software update tile shares a compact column with update management. Numeric precision is left to Home Assistant; no global entity-registry settings are changed. Compact metric tiles replace duplicate gauges; all detailed readings and controls remain below. Alert banners cover explicit API/statistics/hardware failures, not disabled GPS. This view layout requires a newer frontend than the integration's minimum HA version. The comprehensive view also includes component endpoint problems, last successful poll, source age/stale, radio child inventory/settings, per-plugin status, fresh battery charge trend, and a native update tile (opens more-info; it does not install automatically). Replace the new dynamic example rows with exact entity IDs from the same Repeater config entry, including its radio child devices; repeat rows for multiple sources and remove unsupported rows/cards. Radio device prefixes are independent of `REPEATER_SLUG`. Battery trend is charging/discharging/neutral from fresh signed %/h, never an inferred full-battery indication. When replacing an existing view, retain its title, path, icon and other view metadata, and back up the complete dashboard first.
+### Layout and compatibility
+
+- Uses built-in Home Assistant cards; no custom card installation is required
+- Groups the view into **Live overview**, **Recent trends**, **Operations**, **Diagnostics**, and **Reference notes**
+- Uses three responsive desktop columns and natural-height detail cards, with dense placement disabled to keep the overview first
+- Keeps key metrics and optional battery/temperature in the overview; detailed controls, GPS, and secondary readings stay below
+- Shows named badges, compact metric tiles, and explicit API, statistics, and radio problem banners; disabled GPS does not trigger an alarm
+
+The template uses the current **Sections** frontend, which requires a newer Home
+Assistant frontend than the integration's minimum supported version. Configuration
+was saved and read back on HA 2026.9; that is not a rendered-layout verification.
+Numeric precision remains controlled by Home Assistant, without global entity-registry changes.
+
+### Match entities to your installation
+
+- Use exact entity IDs from the same Repeater config entry, including its radio child devices
+- Radio child prefixes are independent of `REPEATER_SLUG`; replacing the parent prefix alone does not resolve every row
+- Repeat rows for multiple radios, plugins, or sensor sources, and remove unsupported rows or cards
+- Keep the existing view's title, path, icon, and other metadata when replacing it, and back up the complete dashboard first
+
+The diagnostics include endpoint problems, last successful poll, source age and
+staleness, radio settings, and individual plugin status. Battery trend means
+**charging**, **discharging**, or **neutral**, based on fresh signed charge-rate
+readings in `%/h`; it does not infer a full battery. The native update tile opens
+more-info and does not install updates automatically.
+
+For a smaller starting point, use the [compact operations view](dashboards/openhop_operations.yaml).
+
+## Alert blueprints
+
+Blueprints are reusable automation templates. Import a template, select the entity
+to monitor, and choose the actions to run. Installing the integration does not
+create these automations or select a notification destination for you.
+
+### Import and create an automation
+
+1. Open **Settings → Automations & scenes → Blueprints** in Home Assistant
+2. Select **Import Blueprint**
+3. Copy the link address of one of the templates below and paste it into the import URL field
+4. Preview and import the blueprint, then select **Create automation**
+5. Choose the entity, sustained duration, and threshold where applicable
+6. Under **Actions to run**, add your own notification or other action
+7. Give the automation a descriptive name and save it
+
+The links below use the stable `main` branch. To test development blueprints,
+replace `/blob/main/` with `/blob/dev/` in the import URL.
+
+| Blueprint | Entity to select |
+| --- | --- |
+| [Low battery](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/low_battery.yaml) | Battery-percentage sensor; thresholds use the selected sensor unit |
+| [High temperature](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/high_temperature.yaml) | Temperature sensor; match the threshold to its unit |
+| [Repeater unavailable](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/unavailable.yaml) | A sensor that becomes unavailable when the Repeater disconnects |
+| [MQTT disconnected](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/broker_disconnected.yaml) | An individual broker connectivity entity you intend to keep connected, not the aggregate any-broker entity |
+| [Stale sensor](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/stale_sensor.yaml) | The source stale problem sensor |
+| [Plugin failure](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/plugin_failure.yaml) | The individual plugin problem sensor |
+| [Update available](https://github.com/openhop-dev/openHop-HA-Integration/blob/main/blueprints/automation/openhop/update_available.yaml) | The update-available binary sensor |
+
+### Example: low-battery notification
+
+Create an automation from **Low battery** and set:
+
+- **Entity to monitor:** your Repeater's battery-percentage sensor
+- **Sustained duration:** 5 minutes
+- **Threshold:** 20
+- **Actions to run:** your phone's notification action, with a message such as “Repeater battery has been below 20% for five minutes”
+
+Reuse the same blueprint to create separate automations for other Repeaters.
+Threshold alerts fire when the value crosses the limit and stays there; they do
+not repeatedly fire while the value remains beyond it. Waiting timers reset after
+Home Assistant restarts or automations reload.
+
+For manual YAML installation and further entity-selection guidance, see
+[alerts and compact view](docs/operational-monitoring.md#alerts-and-compact-view).
+
 
 ## Actions
 
