@@ -71,7 +71,11 @@ class PyMCRepeaterDataUpdateCoordinator(DataUpdateCoordinator[dict]):
                 self.hass, self._async_hourly_update_check, minute=1, second=0
             )
         if self._gps_stream_task is None:
-            self._gps_stream_task = self.hass.async_create_task(self._async_gps_stream_loop())
+            self._gps_stream_task = self.config_entry.async_create_background_task(
+                self.hass,
+                self._async_gps_stream_loop(),
+                "pymc_repeater_gps_stream",
+            )
 
     async def async_stop_runtime(self) -> None:
         """Stop background runtime tasks."""
