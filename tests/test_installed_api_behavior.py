@@ -138,14 +138,23 @@ class InstalledApiBehaviorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(translations[f"plugins_{key}"]["name"], f"{label} plugins")
             self.assertIn(f"sensor.REPEATER_SLUG_{key}_plugins", dashboard)
         tree = ast.parse((COMPONENT / "__init__.py").read_text())
+        registration = next(
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "async_register"
+            and len(node.args) > 1
+            and isinstance(node.args[1], ast.Name)
+            and node.args[1].id == "SERVICE_GET_NEIGHBOR_LINK_HISTORY"
+        )
         bucket_schema = None
-        for node in ast.walk(tree):
+        for node in ast.walk(registration):
             if isinstance(node, ast.Dict):
                 for key, value in zip(node.keys, node.values):
                     if isinstance(key, ast.Call) and key.args and isinstance(key.args[0], ast.Constant) and key.args[0].value == "bucket_seconds":
                         bucket_schema = ast.unparse(value)
                         self.assertFalse(key.keywords, "Bucket mode must stay opt-in without a default")
-        self.assertEqual(bucket_schema, "vol.All(vol.Coerce(int), vol.Range(min=60))")
+        self.assertEqual(bucket_schema, "_bounded_query_integer(60, 86400)")
         services = (COMPONENT / "services.yaml").read_text()
         history = services.split("get_neighbor_link_history:", 1)[1].split("get_adverts_by_contact_type:", 1)[0]
         self.assertIn("bucket_seconds:", history)

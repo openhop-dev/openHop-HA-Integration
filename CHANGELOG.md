@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 1.3.0
+
+- fixed advanced action dispatch by registering native async handlers so home assistant awaits operations and receives actual responses
+
+- added explicit catalogue install and plugin enable, disable, start, stop, restart, data-preserving uninstall, and settings management actions with shared fail-fast write admission and bounded responses
+- added sensor type and configuration actions with complete replacement validation, preserved password masks and rename origins, and explicit restart-required save results
+- added acl permission management with firmware role-byte bounds and optional responses and extended client removal with named identities while preserving legacy public_key calls
+- redacted common credentials from explicit configuration reads by default and documented sensitive opt-in edits, action traces, hardware side effects, and wheel-upload and raw-log limitations
+- added bounded response-returning plugin update checks, optional-version single upgrades, and sequential catalogue-only update-all actions without changing polling or enabling a schedule
+- guarded overlapping plugin upgrades and stopped uncertain batches without retrying writes while excluding settings and raw installation logs from outcomes
+- documented operator-owned daily 03:00 plugin upgrades with an anonymized single-mode automation and captured action responses
+- added alias-safe radio child sensors for shared channel utilization and airtime budgets and cached noise without extra polling or assigning aggregate readings to children
+- added per-radio one-hour and 24-hour received, duplicate, physical transmission, average rssi, and average snr measurements while keeping sliding windows distinct from lifetime totals
+- added per-radio 24-hour lbt transmission, retry, attempt, failure, busy-channel, and severe-contention summaries without storing raw timelines in entity attributes
+- added response-returning radio packet rate, noise-floor statistics, crc error count, local companion statistics, and lbt diagnostics actions with bounded queries and no coordinator refresh
+- added optional exact radio filters and per-radio bucket grouping to neighbor-history actions while preserving raw rows and omitted-field defaults
+- rejected fractional, boolean, and nonfinite neighbor-history query values before http instead of silently truncating or coercing them
+- increased advert-send http timeout to 15 seconds to allow for the backend's 10-second response wait
+- fixed zero-sample noise averages displaying as measured 0 dbm while preserving legacy replies without sample counts
+- added radio telemetry dashboard examples and documented independent child entity ids, shared-channel budgets, fan-out transmission counts, and older-backend limitations
+- extended bundled dashboards with response-aware management scripts, confirmed plugin upgrades, editor-only settings and acl workflows, data-preserving uninstall, and on-demand diagnostic buttons
+- documented the latest repeater dev api review and unresolved backend per-reading cadence metadata limitation while preserving existing integration identifiers, radio aliases, and polling schedules
+- expanded python source-contract ci coverage to 3.11–3.14 and directed dependabot version updates to dev
+- checked runtime and ci dependencies while retaining home assistant-managed library versions and the existing minimum home assistant version
+- expanded executable client, action, radio-discovery, availability, validation, translation, and dashboard regression coverage
+
 ## 1.2.1
 
 - fixed the GPS stream listener blocking Home Assistant startup wrap-up by using a config-entry background task, as reported in [#16](https://github.com/openhop-dev/openHop-HA-Integration/issues/16)

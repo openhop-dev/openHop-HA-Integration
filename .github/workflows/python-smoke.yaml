@@ -23,6 +23,11 @@ permissions: {}
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # HA 2024.1 requires 3.11; current HA 2026.9 requires 3.14.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     permissions:
       contents: read
     steps:
@@ -32,7 +37,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Validate JSON files
         run: |

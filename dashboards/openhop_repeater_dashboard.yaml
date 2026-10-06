@@ -282,6 +282,42 @@ sections:
         {% else %}
         Status unavailable
         {% endif %}
+    # Install examples/openhop_dashboard_scripts.yaml before using these controls.
+    - type: button
+      show_icon: false
+      name: Check plugin catalogue · read-only
+      icon: mdi:puzzle-outline
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_plugin_catalogue
+    - type: button
+      show_icon: false
+      name: Check plugin updates · read-only
+      icon: mdi:puzzle-check-outline
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_check_plugin_updates
+    - type: button
+      show_icon: false
+      name: Upgrade eligible plugins · changes code
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_update_all_plugins
+        data:
+          confirmed: true
+        confirmation:
+          text: Upgrade every eligible catalogue plugin? This changes code and may restart plugins. Reconcile uncertain outcomes before retrying.
+    - type: markdown
+      title: Plugin management
+      content: |-
+        Checks do not install code (they can contact the catalogue/GitHub).
+        For one plugin, use **Developer tools → Actions** and the installed
+        `script.openhop_example_update_plugin` or `install_catalogue_plugin` wrapper
+        with a reviewed real plugin ID and `confirmed: true`.
+        Enable/disable persists state; start/stop does not change enabled state.
+        Restart requires an enabled service plugin. Uninstall preserves data.
+        [Lifecycle and settings workflow](https://github.com/openhop-dev/openHop-HA-Integration/blob/dev/docs/dashboard-management.md#plugins)
     - type: entities
       title: Update Management
       state_color: true
@@ -319,6 +355,22 @@ sections:
   cards:
   - type: vertical-stack
     cards:
+    - type: button
+      show_icon: false
+      name: Inspect sensor types · read-only
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_sensor_types
+    - type: markdown
+      title: Sensor configuration workflow
+      content: |-
+        Read configuration privately in the action editor; edit the **entire**
+        section before calling `script.openhop_example_update_sensor_configuration`.
+        Supply the complete `config` object and `confirmed: true`; no dashboard
+        button replaces definitions. Preserve password masks and rename origins.
+        Saved configuration needs a separate Repeater restart when ready.
+        [Sensor workflow](https://github.com/openhop-dev/openHop-HA-Integration/blob/dev/docs/dashboard-management.md#sensors)
     - type: entities
       title: Repeater Controls
       state_color: true
@@ -362,6 +414,16 @@ sections:
   cards:
   - type: vertical-stack
     cards:
+    - type: markdown
+      title: ACL permissions workflow
+      content: |-
+        Use the action editor wrappers `script.openhop_example_set_acl_permissions`
+        and `script.openhop_example_remove_acl_client` with an exact identity and
+        actual client public key. Review the role before setting `confirmed: true`.
+        Roles: **1 read-only · 2 read-write · 3 admin**; higher flags are retained.
+        Room servers persist only admins; inspect `persisted` privately.
+        Removal is identity-scoped here, never a one-click placeholder grant.
+        [ACL workflow](https://github.com/openhop-dev/openHop-HA-Integration/blob/dev/docs/dashboard-management.md#acl)
     - type: entities
       title: Routing
       state_color: true
@@ -410,6 +472,13 @@ sections:
   cards:
   - type: vertical-stack
     cards:
+    - type: button
+      show_icon: false
+      name: Query noise · 24 h
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_noise_floor_stats
     - type: entities
       title: System Health
       state_color: true
@@ -507,6 +576,66 @@ sections:
         name: Coding rate
       - entity: sensor.REPEATER_SLUG_radio_example_preamble_length
         name: Preamble length
+    # EXAMPLE_RADIO is an independent child-device prefix, NOT REPEATER_SLUG.
+    # Replace each full example ID with exact entity IDs from the same radio child.
+    # Repeat this card for other radios; remove unsupported rows on older backends.
+    - type: entities
+      title: Radio Telemetry · Example Radio
+      show_header_toggle: false
+      entities:
+      - entity: sensor.EXAMPLE_RADIO_channel_utilization
+        name: Shared channel utilization
+      - entity: sensor.EXAMPLE_RADIO_current_channel_airtime
+        name: Current channel airtime
+      - entity: sensor.EXAMPLE_RADIO_maximum_channel_airtime
+        name: Maximum channel airtime
+      - entity: sensor.EXAMPLE_RADIO_cached_noise_floor
+        name: Cached noise floor
+      - entity: sensor.EXAMPLE_RADIO_packets_received_1h
+        name: Received 1h
+      - entity: sensor.EXAMPLE_RADIO_duplicate_packets_1h
+        name: Duplicates 1h
+      - entity: sensor.EXAMPLE_RADIO_physical_transmissions_1h
+        name: Physical TX 1h
+      - entity: sensor.EXAMPLE_RADIO_average_rssi_1h
+        name: Average RSSI 1h
+      - entity: sensor.EXAMPLE_RADIO_average_snr_1h
+        name: Average SNR 1h
+      - entity: sensor.EXAMPLE_RADIO_packets_received_24h
+        name: Received 24h
+      - entity: sensor.EXAMPLE_RADIO_duplicate_packets_24h
+        name: Duplicates 24h
+      - entity: sensor.EXAMPLE_RADIO_physical_transmissions_24h
+        name: Physical TX 24h
+      - entity: sensor.EXAMPLE_RADIO_average_rssi_24h
+        name: Average RSSI 24h
+      - entity: sensor.EXAMPLE_RADIO_average_snr_24h
+        name: Average SNR 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_transmissions_24h
+        name: LBT transmissions 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_retry_packets_24h
+        name: LBT retry packets 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_retry_rate_24h
+        name: LBT retry rate 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_average_attempts_24h
+        name: LBT average attempts 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_p95_attempts_24h
+        name: LBT p95 attempts 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_maximum_attempts_24h
+        name: LBT maximum attempts 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_failed_transmissions_24h
+        name: LBT failed transmissions 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_busy_channel_events_24h
+        name: LBT busy channel events 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_severe_contention_count_24h
+        name: LBT severe contention 24h
+      - entity: sensor.EXAMPLE_RADIO_lbt_severe_contention_rate_24h
+        name: LBT severe contention rate 24h
+    - type: markdown
+      content: |-
+        Radio rows require explicit per-radio backend telemetry. Shared-channel
+        airtime budgets must not be summed. Packet counts are sliding windows;
+        physical transmissions include fan-out egress. Unknown is not zero RF activity.
     - type: entities
       title: Source Freshness
       show_header_toggle: false
@@ -536,6 +665,20 @@ sections:
   cards:
   - type: vertical-stack
     cards:
+    - type: button
+      show_icon: false
+      name: Query packet rates · 24 h
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_radio_packet_rates
+    - type: button
+      show_icon: false
+      name: Query CRC errors · 24 h
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_crc_error_count
     - type: entities
       title: Packet Flow
       state_color: true
@@ -619,6 +762,13 @@ sections:
   cards:
   - type: vertical-stack
     cards:
+    - type: button
+      show_icon: false
+      name: Query LBT · 24 h
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_lbt_diagnostics
     - type: entities
       title: Listen Before Talk Diagnostics
       state_color: true
@@ -701,6 +851,13 @@ sections:
   cards:
   - type: vertical-stack
     cards:
+    - type: button
+      show_icon: false
+      name: Query local companion packets
+      icon: mdi:gesture-tap-button
+      tap_action:
+        action: perform-action
+        perform_action: script.openhop_example_get_companion_stats
     - type: entities
       title: Companions
       state_color: true

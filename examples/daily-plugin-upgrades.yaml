@@ -1,0 +1,29 @@
+# Optional example for automations.yaml. Nothing installs/enables this for you.
+# Replace EXAMPLE_CONFIG_ENTRY_ID with the desired loaded integration entry ID.
+# Uses service: for HA 2024.1 compatibility (newer editors label this an action).
+- id: openhop_example_daily_plugin_upgrades
+  alias: "openHop example: update catalogue plugins at 03:00"
+  description: "Operator-owned schedule in Home Assistant's local timezone"
+  mode: single
+  trigger:
+    - platform: time
+      at: "03:00:00"
+  action:
+    - service: pymc_repeater.update_all_plugins
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        force_refresh: true
+      response_variable: plugin_upgrade_result
+    - condition: template
+      value_template: >-
+        {{ plugin_upgrade_result.stopped or
+           plugin_upgrade_result.counts.failure > 0 or
+           plugin_upgrade_result.counts.unknown > 0 }}
+    - service: persistent_notification.create
+      data:
+        title: "openHop plugin upgrades need review"
+        message: >-
+          Plugin outcomes: {{ plugin_upgrade_result.counts }}.
+          Stopped: {{ plugin_upgrade_result.stopped }}.
+          Inspect the automation trace and Repeater before retrying an unknown
+          outcome. Do not blindly reload or retry while an operation may run.

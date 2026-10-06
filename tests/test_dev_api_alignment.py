@@ -121,8 +121,8 @@ class DevApiAlignmentTests(unittest.TestCase):
             self.assertIn(service, setup)
         self.assertIn("vol.In([1, 2, 4, 8, 16])", setup)
         self.assertIn("vol.Range(min=50, max=5000)", setup)
-        self.assertIn("vol.Range(min=1, max=3)", setup)
-        self.assertIn("vol.Range(min=1, max=168)", setup)
+        self.assertIn("_bounded_query_integer(1, 3)", setup)
+        self.assertIn("_bounded_query_integer(1, 168)", setup)
         self.assertIn("vol.Range(min=1, max=5000)", setup)
 
     def test_new_diagnostics_are_exposed_as_sensors(self) -> None:
@@ -365,8 +365,8 @@ class DevApiAlignmentTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertEqual(manifest["version"], "1.2.1")
-        self.assertIn("## 1.2.1", changelog)
+        self.assertEqual(manifest["version"], "1.3.0")
+        self.assertIn("## 1.3.0", changelog)
         self.assertIn("[#16](https://github.com/openhop-dev/openHop-HA-Integration/issues/16)", changelog)
         self.assertIn("## 1.1.6", changelog)
         self.assertIn("## Unreleased", changelog)

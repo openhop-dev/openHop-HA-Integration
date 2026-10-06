@@ -3,27 +3,43 @@
 ## Radio support and limitations
 
 Radio child devices use the exact stable backend radio ID, linked to the parent
-Repeater device. Inventory is discovered on each shared poll and disappears as
-unavailable when removed. The installed API's `stats.radios` is **configuration**,
-not live per-radio counters. Therefore the inventory sensor reports a configured
-type when supplied, otherwise `configured`. `radio_stack.radio_ids` also works
-when `radios` is empty. No aggregate packet, noise, CRC, RSSI or connectivity value
-is attributed to a child radio. Read-only configuration sensors expose frequency
-(Hz), bandwidth (Hz), TX power (dBm), spreading factor, coding rate and preamble
-length only when supplied in that radio's `radio` configuration. Settings are
-configuration, not proof of measured RF behavior or successful hardware application.
-Genuine per-radio traffic/health sensors remain
-unsupported until a verified per-radio telemetry contract exists. Quiet RF is
-not a failure signal.
+Repeater device. Inventory is discovered on each shared poll; absent radios become
+unavailable. `stats.radios` and `radio_profiles` describe configuration, not live
+RF health. Read-only settings expose frequency, bandwidth, TX power, spreading
+factor, coding rate and preamble only when supplied for that radio. They do not
+prove successful hardware application.
 
-- added parent repeater `radio_status` with recognized aggregate states `ok` and `degraded` and `disabled` from existing stats polling and unknown for missing or unrecognized states
-- added parent repeater `radio_problem` for degraded or disabled status or an explicit aggregate radio error and reported clear only for `ok` with no error
-- exposed `radio_error` on `radio_status` as true for nonempty error text or false for a known state without an error and otherwise unknown without publishing raw exception text in these entities or dashboard cards
-- kept aggregate radio health separate from api connectivity and per-radio configuration without inferring rf delivery from a healthy api or quiet traffic
-- preferred configured `radio_type` over legacy `type` without treating either as live telemetry
-- allowed global `config.radio` to fill missing settings only for a validated sole named default in explicit `single` or `single_fabric` mode and never across multiple radios or ambiguous inventories
-- recognized `single_fabric` in the existing reversible radio lifecycle with exactly one authoritative radio id and unchanged alias and two-full-poll absence safeguards
-- added aggregate radio status and problem rows with a radio badge and an explicit problem banner to the comprehensive dashboard
+### Named radio telemetry in 1.3.0
+
+Newer Repeater dev builds also supply explicitly attributed telemetry. Child
+sensors use these named rows only, never a copy or division of parent aggregates:
+
+- Channel airtime utilization, current airtime and maximum budget
+- Cached noise floor in dBm
+- One-hour and 24-hour received, duplicate and transmission counts, average RSSI
+  and average SNR
+- 24-hour LBT summary transmission, retry-rate, average-attempt and contention data
+
+These values arrive through existing full-poll requests, with no per-radio request
+loop. Missing newer fields, malformed or ambiguous IDs, removed sources and
+nonfinite values remain unavailable. Existing radio aliases map runtime rows to
+the established child identity before discovery. Histories remain explicit
+response-returning actions, not entity attributes.
+
+Shared-channel radios report the same airtime ledger; do not add their child
+budgets together. Parent utilization on the newer backend is the maximum channel
+utilization. Child packet counts are sliding windows, not `total_increasing`
+counters. Physical transmissions count fan-out egress, whereas older aggregate
+packet counts count packet rows. Null signal averages are not zero-valued RF
+measurements. No-sample noise statistics are unavailable, not a measured 0 dBm.
+Quiet RF alone is not a failure signal.
+
+Parent `radio_status` and `radio_problem` still describe aggregate runtime health.
+Only error presence is exposed, not exception text. Neither API reachability nor
+a configured radio proves successful RF delivery. Single/global configuration
+fallback is limited to a sole named default in explicit `single` or
+`single_fabric` mode. Alias validation and reversible lifecycle safeguards remain
+unchanged. See [the dev API audit](dev-api-1.3.0.md) for provenance and limitations.
 
 ## Preserving radio names after a backend ID change
 

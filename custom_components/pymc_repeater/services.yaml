@@ -1,3 +1,305 @@
+enable_plugin:
+  name: Enable plugin
+  description: Enable persistently and start service plugins. Returns minimized outcome metadata. Shared write admission; uncertain completion requires reconciliation, not retries. HTTP budget 930 seconds. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+
+disable_plugin:
+  name: Disable plugin
+  description: Stop and disable persistently. Returns minimized outcome metadata. Shared write admission; uncertain completion requires reconciliation, not retries. HTTP budget 930 seconds. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+
+start_plugin:
+  name: Start plugin
+  description: Start an enabled service plugin without changing enabled state. Returns minimized outcome metadata. Shared write admission; uncertain completion requires reconciliation, not retries. HTTP budget 930 seconds. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+
+stop_plugin:
+  name: Stop plugin
+  description: Stop without disabling; enabled plugins can start again after manager restart. Returns minimized outcome metadata. Shared write admission; uncertain completion requires reconciliation, not retries. HTTP budget 930 seconds. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+
+restart_plugin:
+  name: Restart plugin
+  description: Restart an enabled service plugin. Returns minimized outcome metadata. Shared write admission; uncertain completion requires reconciliation, not retries. HTTP budget 930 seconds. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+
+uninstall_plugin:
+  name: Uninstall plugin
+  description: Remove code; preserve plugin data unless delete_data is explicitly true. Returns minimized outcome metadata. Shared write admission; uncertain completion requires reconciliation, not retries. HTTP budget 930 seconds. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+    delete_data:
+      description: Permanently delete plugin-owned data as well as release code. Defaults to data preservation.
+      default: false
+      selector:
+        boolean:
+
+get_plugin_catalogue:
+  name: Get plugin catalogue
+  description: Return public catalogue metadata for at most 100 entries, without settings, URLs or raw errors. Explicit network request; no polling or refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    force_refresh:
+      description: Refresh backend catalogue/release caches.
+      default: false
+      selector:
+        boolean:
+
+install_catalogue_plugin:
+  name: Install catalogue plugin
+  description: Install a backend-approved catalogue wheel. Can replace existing code; does not invent version approval. Returns metadata only. HTTP budget 930 seconds; no blind retries or immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+    version:
+      description: Optional exact approved version token; omit for backend-selected version.
+      selector:
+        text:
+    force_refresh:
+      description: Refresh backend catalogue/release caches.
+      default: false
+      selector:
+        boolean:
+
+get_plugin_settings:
+  name: Get plugin settings
+  description: Read effective saved/default configuration on demand. Common credential keys are redacted by default; sensitive responses can enter HA action traces. No polling or refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+    include_sensitive:
+      description: Return actual plugin credentials for a full replacement edit. Treat responses and action traces as sensitive; backend does not preserve placeholder masks.
+      default: false
+      selector:
+        boolean:
+
+update_plugin_settings:
+  name: Update plugin settings
+  description: Replace the entire plugin configuration JSON object, at most 256 KiB. Redacted placeholders are rejected. Returns metadata only, never configuration. No immediate refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact plugin ID, 1–128 ASCII token characters starting alphanumeric.
+      selector:
+        text:
+    config:
+      required: true
+      description: Complete JSON object, not a JSON string or partial patch.
+      selector:
+        object:
+    restart:
+      description: Restart an enabled service plugin after saving; UI-only or disabled plugins are not restarted.
+      default: false
+      selector:
+        boolean:
+
+get_sensor_types:
+  name: Get sensor types
+  description: Return available sensor types and settings schemas without hardware reads or refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+
+get_sensor_configuration:
+  name: Get sensor configuration
+  description: Read the sensor section on demand. Preserve backend password masks and _original_name hints for full replacement edits. No hardware reads or refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    include_sensitive:
+      description: Return other unmasked credential fields if needed for an edit. Backend password masks remain masked. Responses and traces may be sensitive.
+      default: false
+      selector:
+        boolean:
+
+update_sensor_configuration:
+  name: Update sensor configuration
+  description: Replace the entire sensor section, not a partial patch. Saving requires a separate Repeater restart to apply. No automatic restart, forced read or refresh.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    config:
+      required: true
+      description: Complete JSON object with enabled, positive finite poll_interval_seconds, auto_install_packages and all definitions (at most 100). Preserve password ***** masks and _original_name origins. Maximum 256 KiB.
+      selector:
+        object:
+
+set_acl_permissions:
+  name: Set ACL permissions
+  description: Add or change a client role on an exact identity. Role is the low two bits (1 read-only, 2 read-write, 3 admin); higher flags are preserved. Guest role 0 is rejected. Room servers persist only admins; inspect persisted in the optional response. Refreshes cached telemetry after success.
+  fields:
+    config_entry_id:
+      description: Select the Repeater entry; required when multiple entries are configured.
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    identity_name:
+      required: true
+      description: Exact repeater identity or room server name, at most 256 characters.
+      selector:
+        text:
+    client_pubkey:
+      required: true
+      description: Exact full 64-character hexadecimal client public key.
+      selector:
+        text:
+    permissions:
+      required: true
+      description: Integer 1–255 with low two bits 1, 2 or 3. Multiples of four are invalid.
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: box
+
+check_plugin_updates:
+  name: Check plugin updates
+  description: Check eligible installed catalogue plugins on demand and return sanitized per-plugin outcomes. Does not enable a schedule or change polling.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      description: Optional exact installed plugin ID (1–128 ASCII letters, digits, dots, underscores, plus or hyphen; starts alphanumeric). Omit to check all.
+      selector:
+        text:
+    force_refresh:
+      description: Refresh backend catalogue/release caches instead of using cached metadata.
+      default: false
+      selector:
+        boolean:
+
+update_plugin:
+  name: Update plugin
+  description: Upgrade one eligible installed catalogue plugin and return success, skipped, failure or unknown. May take 930 seconds per request. Unknown outcomes require manual reconciliation before reloading the entry; never retry blindly.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    plugin_id:
+      required: true
+      description: Exact installed plugin ID (1–128 ASCII token characters; starts alphanumeric).
+      selector:
+        text:
+    version:
+      description: Optional exact version token (1–128 ASCII letters, digits, dots, underscores, plus or hyphen; starts alphanumeric). Backend catalogue approval still applies.
+      selector:
+        text:
+    force_refresh:
+      default: false
+      selector:
+        boolean:
+
+update_all_plugins:
+  name: Update all plugins
+  description: Sequentially upgrade all eligible installed catalogue plugins (maximum inventory 100). Continue ordinary errors but stop on unknown/conflict outcomes. Returns per-plugin outcomes and counts. No schedule is enabled automatically.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    force_refresh:
+      description: Refresh backend metadata. This may contact the catalogue or GitHub.
+      default: false
+      selector:
+        boolean:
+
 ping_neighbor:
   name: Ping neighbor
   description: Send a ping to a neighbor by hash/path ID.
@@ -614,13 +916,22 @@ get_neighbor_link_history:
         config_entry:
           integration: pymc_repeater
     bucket_seconds:
-      description: Optional bucket width in seconds (minimum 60). Omit for raw rows; supplying it returns buckets instead.
+      description: Optional bucket width in seconds (60–86400). Omit for raw rows; supplying it returns buckets instead.
       selector:
         number:
           min: 60
+          max: 86400
           step: 1
           mode: box
           unit_of_measurement: s
+    radio_id:
+      description: Optional exact nonempty radio ID to filter observations.
+      selector:
+        text:
+    by_radio:
+      description: Split time buckets by receiving radio. Requires bucket_seconds when true; omit to retain legacy grouping.
+      selector:
+        boolean:
     peer_hash:
       required: true
       selector:
@@ -716,7 +1027,7 @@ get_acl_clients:
 
 remove_acl_client:
   name: Remove ACL client
-  description: Remove an authenticated client from one or more ACLs.
+  description: Remove an authenticated client from one or more ACLs. Named identity takes precedence over hash; omission of both targets every ACL. Legacy public_key field is preserved.
   fields:
     config_entry_id:
       selector:
@@ -727,6 +1038,10 @@ remove_acl_client:
       selector:
         text:
     identity_hash:
+      selector:
+        text:
+    identity_name:
+      description: Optional exact identity or room name, preferred over identity_hash.
       selector:
         text:
 
@@ -798,4 +1113,123 @@ delete_room_message:
         number:
           min: 1
           max: 1000000000
+          mode: box
+
+get_radio_packet_rates:
+  name: Get radio packet rates
+  description: Return bounded per-radio reception and physical-transmission rate buckets. No coordinator refresh.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    hours:
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 168
+          step: 1
+          mode: box
+    bucket_seconds:
+      description: Optional bucket width; omit to retain the backend default.
+      selector:
+        number:
+          min: 60
+          max: 86400
+          step: 1
+          mode: box
+
+get_noise_floor_stats:
+  name: Get noise floor stats
+  description: Return aggregate or named-radio noise statistics. Zero-measurement averages are unknown. No coordinator refresh.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    hours:
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 168
+          step: 1
+          mode: box
+    radio_id:
+      description: Optional exact nonempty radio ID.
+      selector:
+        text:
+
+get_crc_error_count:
+  name: Get CRC error count
+  description: Return aggregate or named-radio CRC errors for a bounded window. No coordinator refresh.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    hours:
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 168
+          step: 1
+          mode: box
+    radio_id:
+      description: Optional exact nonempty radio ID.
+      selector:
+        text:
+
+get_companion_stats:
+  name: Get companion stats
+  description: Return local companion diagnostics, not remote RF status or telemetry. No coordinator refresh.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    type:
+      default: packets
+      selector:
+        select:
+          options:
+            - core
+            - radio
+            - packets
+    companion_name:
+      selector:
+        text:
+
+get_lbt_diagnostics:
+  name: Get LBT diagnostics
+  description: Return bounded LBT diagnostics including per-radio results when supplied by the backend. There is no radio_id filter. No coordinator refresh.
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: pymc_repeater
+    hours:
+      default: 24
+      selector:
+        number:
+          min: 1
+          max: 168
+          step: 1
+          mode: box
+    bucket_seconds:
+      description: Optional bucket width; omit to retain the backend default.
+      selector:
+        number:
+          min: 60
+          max: 3600
+          step: 1
+          mode: box
+    severe_attempt_threshold:
+      selector:
+        number:
+          min: 2
+          max: 16
+          step: 1
           mode: box

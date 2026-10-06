@@ -17,6 +17,29 @@ class ComprehensiveDashboardTests(unittest.TestCase):
         self.assertIn('REPEATER_SLUG', text)
         self.assertIn('exact entity IDs', text)
 
+    def test_radio_130_rows_use_explicit_independent_child_examples(self):
+        text = (ROOT / 'dashboards/openhop_repeater_dashboard.yaml').read_text()
+        self.assertIn('title: Radio Telemetry · Example Radio', text)
+        self.assertIn('Replace each full example ID with exact entity IDs', text)
+        suffixes = [
+            'channel_utilization', 'current_channel_airtime', 'maximum_channel_airtime',
+            'cached_noise_floor',
+            *[f'{field}_{window}' for window in ('1h', '24h')
+              for field in ('packets_received', 'duplicate_packets', 'physical_transmissions',
+                            'average_rssi', 'average_snr')],
+            *[f'lbt_{field}_24h' for field in (
+                'transmissions', 'retry_packets', 'retry_rate', 'average_attempts',
+                'p95_attempts', 'maximum_attempts', 'failed_transmissions',
+                'busy_channel_events', 'severe_contention_count', 'severe_contention_rate')],
+        ]
+        for suffix in suffixes:
+            self.assertIn('sensor.EXAMPLE_RADIO_' + suffix, text)
+        self.assertIn('airtime budgets must not be summed', text)
+        self.assertIn('Packet counts are sliding windows', text)
+        overview = text.split('heading: Recent trends')[0]
+        self.assertNotIn('EXAMPLE_RADIO', overview)
+        self.assertNotIn('custom:', text)
+
     def test_density_uses_natural_height_columns_and_named_badges(self):
         text = (ROOT / 'dashboards/openhop_repeater_dashboard.yaml').read_text()
         self.assertIn('type: vertical-stack', text)

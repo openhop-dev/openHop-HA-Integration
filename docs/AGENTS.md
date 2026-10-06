@@ -36,10 +36,10 @@ There is no standalone Python/JavaScript package manifest, requirements file, Ma
 ## Runtime and dependencies
 
 - Language: Python plus JSON, YAML, Markdown, and PNG assets.
-- Runtime target verified from CI: **Python 3.12**.
+- Runtime source-contract CI covers **Python 3.11–3.14**; this is not live testing of four HA versions.
 - Minimum Home Assistant version: **2024.1.0**, from `hacs.json`.
-- Integration model: Home Assistant config-entry integration with `iot_class: local_polling` and six forwarded platforms: sensor, binary sensor, button, select, switch, and number.
-- `manifest.json` declares no third-party requirements. Home Assistant supplies its own APIs and the imported runtime libraries (`aiohttp`, `yarl`, and `voluptuous`).
+- Integration model: Home Assistant config-entry integration with `iot_class: local_polling` and seven forwarded platforms: update, sensor, binary sensor, button, select, switch, and number.
+- `manifest.json` declares no third-party requirements. Home Assistant owns `aiohttp`, `yarl`, and schema validation; newer HA supplies the `voluptuous` import through its `probatio` compatibility alias. Do not override HA pins with standalone requirements.
 - No repository-supported standalone virtual-environment or dependency-install command exists. The source-only contract suite uses the Python standard library.
 
 Do not invent a pip/npm setup step. For live runtime testing, install the component in a compatible Home Assistant development or test instance; this repository does not provide that harness.
