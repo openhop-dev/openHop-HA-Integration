@@ -28,6 +28,21 @@ cards:
       voltage, charge-state trend, temperature, sensor age/stale, and individual plugin problem
       entities here using the card editor. Dynamic names and registry suffixes
       vary by installation. Missing or stale readings are not healthy zeroes.
+  # Optional: install the companion scripts and replace their entry ID first.
+  - type: button
+    show_icon: false
+    name: Check plugin updates · read-only
+    icon: mdi:puzzle-check-outline
+    tap_action:
+      action: perform-action
+      perform_action: script.openhop_example_check_plugin_updates
+  - type: markdown
+    title: Explicit management
+    content: >-
+      No plugin upgrades or configuration replacements run automatically.
+      Use the comprehensive view and its companion script fields for lifecycle,
+      sensor configuration, ACL permissions and on-demand diagnostics.
+      [Setup and safety](https://github.com/openhop-dev/openHop-HA-Integration/blob/dev/docs/dashboard-management.md).
   - type: history-graph
     title: Resource trends
     hours_to_show: 12

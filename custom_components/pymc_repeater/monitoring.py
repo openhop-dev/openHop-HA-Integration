@@ -236,6 +236,100 @@ def radio_inventory(data: dict, aliases: Any = _NO_RADIO_ALIASES) -> dict[str, d
     }
 
 
+# Sliding windows and current shared channel budgets are measurements, not
+# lifetime counters. Keep ledger values on each child; never sum them here.
+RADIO_TELEMETRY: dict[str, tuple[str, str | None]] = {
+    "channel_utilization": ("Channel utilization", "%"),
+    "current_channel_airtime": ("Current channel airtime", "ms"),
+    "max_channel_airtime": ("Maximum channel airtime", "ms"),
+    "noise_floor": ("Cached noise floor", "dBm"),
+}
+for _window in ("1h", "24h"):
+    for _field, _name, _unit in (
+        ("received", "Packets received", None),
+        ("duplicates", "Duplicate packets", None),
+        ("transmissions", "Physical transmissions", None),
+        ("avg_rssi", "Average RSSI", "dBm"),
+        ("avg_snr", "Average SNR", "dB"),
+    ):
+        RADIO_TELEMETRY[f"{_field}_{_window}"] = (f"{_name} ({_window})", _unit)
+for _field, _name, _unit in (
+    ("total_transmissions", "LBT transmissions", None),
+    ("retry_packets", "LBT retry packets", None),
+    ("retry_rate_pct", "LBT retry rate", "%"),
+    ("avg_attempts", "LBT average attempts", None),
+    ("p95_attempts", "LBT p95 attempts", None),
+    ("max_attempts", "LBT maximum attempts", None),
+    ("failed_transmissions", "LBT failed transmissions", None),
+    ("busy_channel_events", "LBT busy channel events", None),
+    ("severe_contention_count", "LBT severe contention count", None),
+    ("severe_contention_pct", "LBT severe contention rate", "%"),
+):
+    RADIO_TELEMETRY[f"lbt_{_field}_24h"] = (f"{_name} (24h)", _unit)
+
+LBT_RADIO_FIELDS = (
+    "total_transmissions", "retry_packets", "retry_rate_pct", "avg_attempts",
+    "p95_attempts", "max_attempts", "failed_transmissions", "busy_channel_events",
+    "severe_contention_count", "severe_contention_pct",
+)
+
+
+def radio_telemetry(data: dict, aliases: Any = _NO_RADIO_ALIASES) -> dict[str, dict]:
+    """Expose only finite child summary scalars from already-polled endpoints."""
+    inventory = radio_inventory(data, aliases)
+    result: dict[str, dict] = {rid: {} for rid in inventory}
+    if not inventory:
+        return result
+    mapping = parse_radio_aliases({} if aliases is _NO_RADIO_ALIASES else aliases)
+    runtime = radio_inventory(data)
+
+    def add_rows(payload: Any, source: str, fields: dict[str, str], *, summary: bool = False) -> None:
+        if not isinstance(payload, dict) or payload.get("error") or payload.get("success") is False:
+            return
+        rows = payload.get(source)
+        found: dict[str, dict] = {}
+        ambiguous: set[str] = set()
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict):
+                continue
+            rid = row.get("radio_id")
+            if not isinstance(rid, str) or not rid:
+                continue
+            identity = mapping.get(rid, rid)
+            if identity in found or rid not in runtime or identity not in inventory:
+                ambiguous.add(identity)
+            found[identity] = row
+        for identity, row in found.items():
+            if identity in ambiguous or row.get("error") or row.get("success") is False:
+                continue
+            metrics = row.get("summary") if summary else row
+            if (not isinstance(metrics, dict) or metrics.get("error")
+                    or metrics.get("success") is False
+                    or (summary and metrics.get("has_lbt_data") is not True)):
+                continue
+            for field, key in fields.items():
+                value = finite_number(metrics.get(field))
+                if value is not None:
+                    result[identity][key] = value
+
+    stats = data.get("stats")
+    add_rows(stats, "airtime_radios", {
+        "utilization_percent": "channel_utilization",
+        "current_airtime_ms": "current_channel_airtime",
+        "max_airtime_ms": "max_channel_airtime",
+    })
+    add_rows(stats, "noise_floor_radios", {"noise_floor_dbm": "noise_floor"})
+    for endpoint, window in (("packet_stats_1h", "1h"), ("packet_stats", "24h")):
+        add_rows(data.get(endpoint), "radios", {
+            field: f"{field}_{window}"
+            for field in ("received", "duplicates", "transmissions", "avg_rssi", "avg_snr")
+        })
+    add_rows(data.get("lbt_diagnostics"), "radios", {
+        field: f"lbt_{field}_24h" for field in LBT_RADIO_FIELDS
+    }, summary=True)
+    return result
+
+
 def measurement_class(field: str) -> str | None:
     """Only classify measured fields with known physical units."""
     if field in ("battery_percent", "battery_percentage"):

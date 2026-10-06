@@ -8,7 +8,10 @@ from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySen
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
 from .const import CONF_RADIO_ID_ALIASES, DOMAIN, MANUFACTURER
-from .monitoring import RADIO_FIELDS, charge_state, plugin_problem, radio_inventory, reading_age, reading_stale
+from .monitoring import (
+    RADIO_FIELDS, RADIO_TELEMETRY, charge_state, plugin_problem, radio_inventory,
+    radio_telemetry, reading_age, reading_stale,
+)
 from .sensor import PyMCBaseEntity, _external_sensor_identity, _external_sensor_readings, _nested
 
 
@@ -34,6 +37,9 @@ def _snapshot(coordinator, binary: bool) -> dict:
             for field in RADIO_FIELDS:
                 if field in radio:
                     values[("radio", radio_id, field)] = radio[field]
+        for radio_id, metrics in radio_telemetry(data, aliases).items():
+            for field, value in metrics.items():
+                values[("radio", radio_id, field)] = value
     plugins = _nested(data, "plugin_summary", "plugins")
     for plugin in plugins if isinstance(plugins, list) else []:
         if not isinstance(plugin, dict) or not isinstance(plugin.get("id"), str):
@@ -125,6 +131,16 @@ class MonitoringSensor(MonitoringEntity, SensorEntity):
         super().__init__(entry, coordinator, key)
         if key[0] == "radio":
             self._attr_native_unit_of_measurement = {"frequency": "Hz", "bandwidth": "Hz", "tx_power": "dBm"}.get(key[2])
+            if key[2] in RADIO_TELEMETRY:
+                name, unit = RADIO_TELEMETRY[key[2]]
+                self._attr_name = name
+                self._attr_translation_key = f"radio_{key[2]}"
+                self._attr_native_unit_of_measurement = unit
+                self._attr_state_class = SensorStateClass.MEASUREMENT
+                if unit == "ms":
+                    self._attr_device_class = SensorDeviceClass.DURATION
+                elif unit == "dBm":
+                    self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
         if key[2] == "charge_state":
             self._attr_icon = "mdi:battery-sync-outline"
         if key[2] == "age":

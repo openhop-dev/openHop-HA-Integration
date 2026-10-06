@@ -38,6 +38,9 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
 ]
 
+SERVICE_CHECK_PLUGIN_UPDATES = "check_plugin_updates"
+SERVICE_UPDATE_PLUGIN = "update_plugin"
+SERVICE_UPDATE_ALL_PLUGINS = "update_all_plugins"
 SERVICE_PING_NEIGHBOR = "ping_neighbor"
 SERVICE_SEND_ADVERT = "send_advert"
 SERVICE_PUBLISH_NEIGHBORS = "publish_neighbors"
@@ -68,6 +71,11 @@ SERVICE_GET_FILTERED_PACKETS = "get_filtered_packets"
 SERVICE_GET_PACKET_BY_HASH = "get_packet_by_hash"
 SERVICE_GET_NEIGHBOR_LINKS = "get_neighbor_links"
 SERVICE_GET_NEIGHBOR_LINK_HISTORY = "get_neighbor_link_history"
+SERVICE_GET_RADIO_PACKET_RATES = "get_radio_packet_rates"
+SERVICE_GET_NOISE_FLOOR_STATS = "get_noise_floor_stats"
+SERVICE_GET_CRC_ERROR_COUNT = "get_crc_error_count"
+SERVICE_GET_COMPANION_STATS = "get_companion_stats"
+SERVICE_GET_LBT_DIAGNOSTICS = "get_lbt_diagnostics"
 SERVICE_GET_ADVERTS_BY_CONTACT_TYPE = "get_adverts_by_contact_type"
 SERVICE_GET_ADVERTS_COUNT_BY_CONTACT_TYPE = "get_adverts_count_by_contact_type"
 SERVICE_GET_ACL_CLIENTS = "get_acl_clients"
@@ -163,6 +171,23 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_PING_NEIGHBOR):
         return
 
+    def _bounded_query_integer(minimum: int, maximum: int) -> Callable:
+        """Use the client's strict finite bounds in action schemas too."""
+        def validate(value: Any) -> int:
+            try:
+                return PyMCRepeaterApiClient.validate_query_integer(value, minimum, maximum)
+            except PyMCRepeaterError as err:
+                raise vol.Invalid(str(err)) from err
+        return validate
+
+
+    def _radio_id(value: Any) -> str:
+        """Validate exact radio identity without coercion."""
+        try:
+            return PyMCRepeaterApiClient.validate_radio_id(value)
+        except PyMCRepeaterError as err:
+            raise vol.Invalid(str(err)) from err
+
     async def _with_api(
         call: ServiceCall,
         func: Callable[[PyMCRepeaterApiClient, str], Awaitable[Any]],
@@ -199,17 +224,169 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             return result
         return {"result": result}
 
+    def _async_service_handler(
+        handler: Callable[[ServiceCall], Awaitable[Any]],
+    ) -> Callable[[ServiceCall], Awaitable[Any]]:
+        """Expose native async handlers so HA awaits work on its event loop."""
+        async def async_handle(call: ServiceCall) -> Any:
+            return await handler(call)
+
+        return async_handle
+
+    def _plugin_text(value: Any) -> str:
+        try:
+            return PyMCRepeaterApiClient.validate_plugin_text(value)
+        except PyMCRepeaterError as err:
+            raise vol.Invalid(str(err)) from err
+
+    def _management_object(value: Any) -> dict[str, Any]:
+        try:
+            return PyMCRepeaterApiClient.validate_json_object(value)
+        except PyMCRepeaterError as err:
+            raise vol.Invalid(str(err)) from err
+
+    def _management_validator(method: str) -> Callable:
+        def validate(value: Any) -> Any:
+            try:
+                return getattr(PyMCRepeaterApiClient, method)(value)
+            except PyMCRepeaterError as err:
+                raise vol.Invalid(str(err)) from err
+        return validate
+
+    hass.services.async_register(
+        DOMAIN, "set_acl_permissions",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_set_acl_permissions(
+            identity_name=call.data["identity_name"], client_pubkey=call.data["client_pubkey"],
+            permissions=call.data["permissions"]), refresh=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Required("identity_name"): _management_validator("validate_management_name"),
+                           vol.Required("client_pubkey"): _management_validator("validate_acl_public_key"),
+                           vol.Required("permissions"): _management_validator("validate_acl_permissions")}),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    def _sensor_configuration(value: Any) -> dict[str, Any]:
+        try:
+            return PyMCRepeaterApiClient.validate_sensor_configuration(value)
+        except PyMCRepeaterError as err:
+            raise vol.Invalid(str(err)) from err
+
+    hass.services.async_register(
+        DOMAIN, "get_sensor_types",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_get_sensor_types(), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}), supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "get_sensor_configuration",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_get_sensor_configuration(
+            include_sensitive=call.data.get("include_sensitive", False)), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Optional("include_sensitive", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "update_sensor_configuration",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_update_sensor_configuration(
+            config=call.data["config"]), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str, vol.Required("config"): _sensor_configuration}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN, "get_plugin_settings",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_get_plugin_settings(
+            plugin_id=call.data["plugin_id"], include_sensitive=call.data.get("include_sensitive", False)),
+            always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str, vol.Required("plugin_id"): _plugin_text,
+                           vol.Optional("include_sensitive", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "update_plugin_settings",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_update_plugin_settings(
+            plugin_id=call.data["plugin_id"], config=call.data["config"], restart=call.data.get("restart", False)),
+            always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str, vol.Required("plugin_id"): _plugin_text,
+                           vol.Required("config"): _management_object,
+                           vol.Optional("restart", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN, "get_plugin_catalogue",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_get_plugin_catalogue(
+            force_refresh=call.data.get("force_refresh", False)), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Optional("force_refresh", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "install_catalogue_plugin",
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_install_catalogue_plugin(
+            plugin_id=call.data["plugin_id"], version=call.data.get("version"),
+            force_refresh=call.data.get("force_refresh", False)), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Required("plugin_id"): _plugin_text,
+                           vol.Optional("version"): _plugin_text,
+                           vol.Optional("force_refresh", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    for operation in ("enable", "disable", "start", "stop", "restart", "uninstall"):
+        fields = {vol.Optional(CONF_ENTRY_ID): str, vol.Required("plugin_id"): _plugin_text}
+        if operation == "uninstall":
+            fields[vol.Optional("delete_data", default=False)] = bool
+        hass.services.async_register(
+            DOMAIN, operation + "_plugin",
+            _async_service_handler(lambda call, operation=operation: _with_api_response(
+                call, lambda api, _: api.async_plugin_lifecycle(
+                    plugin_id=call.data["plugin_id"], operation=operation,
+                    delete_data=call.data.get("delete_data", False)), always_return=True)),
+            schema=vol.Schema(fields), supports_response=SupportsResponse.ONLY,
+        )
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_CHECK_PLUGIN_UPDATES,
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_check_plugin_updates(
+            plugin_id=call.data.get("plugin_id"), force_refresh=call.data.get("force_refresh", False)),
+            always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Optional("plugin_id"): _plugin_text,
+                           vol.Optional("force_refresh", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_UPDATE_PLUGIN,
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_update_plugin(
+            plugin_id=call.data["plugin_id"], version=call.data.get("version"),
+            force_refresh=call.data.get("force_refresh", False)), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Required("plugin_id"): _plugin_text,
+                           vol.Optional("version"): _plugin_text,
+                           vol.Optional("force_refresh", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_UPDATE_ALL_PLUGINS,
+        _async_service_handler(lambda call: _with_api_response(call, lambda api, _: api.async_update_all_plugins(
+            force_refresh=call.data.get("force_refresh", False)), always_return=True)),
+        schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str,
+                           vol.Optional("force_refresh", default=False): bool}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_PING_NEIGHBOR,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_ping_neighbor(
                 target_id=call.data["target_id"],
                 timeout=call.data.get("timeout", 10),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -224,11 +401,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_SEND_ADVERT,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_send_advert(call.data.get("mode", "flood")),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -240,22 +417,22 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_PUBLISH_NEIGHBORS,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_publish_neighbors(),
             refresh=True,
-        ),
+        )),
         schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
     )
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_NEIGHBOR_SCOPES,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_neighbor_scopes(),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
         supports_response=SupportsResponse.ONLY,
     )
@@ -263,11 +440,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_QUERY_NEIGHBOR_SCOPES,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_query_neighbor_scopes(call.data["pubkey"]),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -280,7 +457,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_ROOM_POST_MESSAGE,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_room_post_message(
                 room_name=call.data.get("room_name"),
@@ -290,7 +467,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 txt_type=call.data.get("txt_type", 0),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -306,14 +483,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_ROOM_MESSAGES_CLEAR,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_room_messages_clear(
                 room_name=call.data.get("room_name"),
                 room_hash=call.data.get("room_hash"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -326,7 +503,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_CAD_CALIBRATION_START,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_cad_calibration_start(
                 samples=call.data.get("samples", 8),
@@ -336,7 +513,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 cad_timeout_ms=call.data.get("cad_timeout_ms", 500),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -360,16 +537,16 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_CAD_CALIBRATION_STOP,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call, lambda api, _: api.async_cad_calibration_stop(), refresh=False
-        ),
+        )),
         schema=vol.Schema({vol.Optional(CONF_ENTRY_ID): str}),
     )
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_CAD_MANUAL_CHECK,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_cad_manual_check(
                 samples=call.data.get("samples", 1),
@@ -380,7 +557,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 apply_live=call.data.get("apply_live", False),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -408,7 +585,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_SAVE_CAD_SETTINGS,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_save_cad_settings(
                 peak=call.data["peak"],
@@ -416,7 +593,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 cad_symbol_num=call.data.get("cad_symbol_num", 2),
                 detection_rate=call.data.get("detection_rate", 0),
             ),
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -435,9 +612,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_DB_PURGE,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call, lambda api, _: api.async_db_purge(call.data["tables"])
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -449,9 +626,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_UPDATE_RADIO_CONFIG,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call, lambda api, _: api.async_update_radio_config(call.data["payload"])
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -463,9 +640,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_UPDATE_MQTT_CONFIG,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call, lambda api, _: api.async_update_mqtt_config(call.data["payload"])
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -477,7 +654,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_SEND_TEXT,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_send_text(
                 pub_key=call.data["pub_key"],
@@ -486,7 +663,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -501,7 +678,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_SEND_CHANNEL_MESSAGE,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_send_channel_message(
                 channel_idx=call.data["channel_idx"],
@@ -509,7 +686,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -523,7 +700,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_LOGIN,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_login(
                 pub_key=call.data["pub_key"],
@@ -531,7 +708,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -545,7 +722,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_REQUEST_STATUS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_companion_request_status(
                 pub_key=call.data["pub_key"],
@@ -553,7 +730,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -570,7 +747,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_REQUEST_TELEMETRY,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_companion_request_telemetry(
                 pub_key=call.data["pub_key"],
@@ -581,7 +758,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 want_environment=call.data.get("want_environment", True),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -601,7 +778,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_SEND_COMMAND,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_send_command(
                 pub_key=call.data["pub_key"],
@@ -610,7 +787,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -625,14 +802,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_RESET_PATH,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_reset_path(
                 pub_key=call.data["pub_key"],
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -645,14 +822,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_SET_ADVERT_NAME,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_set_advert_name(
                 advert_name=call.data["advert_name"],
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -665,7 +842,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_COMPANION_SET_ADVERT_LOCATION,
-        lambda call: _with_api(
+        _async_service_handler(lambda call: _with_api(
             call,
             lambda api, _: api.async_companion_set_advert_location(
                 latitude=call.data["latitude"],
@@ -673,7 +850,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 companion_name=call.data.get("companion_name"),
             ),
             refresh=False,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -687,11 +864,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_BROKER_PRESETS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_broker_presets(),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -703,11 +880,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_LOGS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_logs(),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -719,13 +896,13 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_RECENT_PACKETS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_recent_packets(
                 limit=call.data.get("limit", 100),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -738,7 +915,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_FILTERED_PACKETS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_filtered_packets(
                 packet_type=call.data.get("packet_type"),
@@ -748,7 +925,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 limit=call.data.get("limit", 1000),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -765,11 +942,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_PACKET_BY_HASH,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_packet_by_hash(call.data["packet_hash"]),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -782,14 +959,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_NEIGHBOR_LINKS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_neighbor_links(
                 active_within_seconds=call.data.get("active_within_seconds", 90),
                 limit=call.data.get("limit", 500),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -807,7 +984,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_NEIGHBOR_LINK_HISTORY,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_neighbor_link_history(
                 peer_hash=call.data["peer_hash"],
@@ -815,25 +992,21 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 hours=call.data.get("hours", 24),
                 limit=call.data.get("limit", 1000),
                 bucket_seconds=call.data.get("bucket_seconds"),
+                radio_id=call.data.get("radio_id"),
+                by_radio=call.data.get("by_radio"),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("peer_hash"): str,
-                vol.Optional("bucket_seconds"): vol.All(
-                    vol.Coerce(int), vol.Range(min=60)
-                ),
-                vol.Required("path_hash_size"): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=3)
-                ),
-                vol.Optional("hours", default=24): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=168)
-                ),
-                vol.Optional("limit", default=1000): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=5000)
-                ),
+                vol.Optional("bucket_seconds"): _bounded_query_integer(60, 86400),
+                vol.Optional("radio_id"): _radio_id,
+                vol.Optional("by_radio"): bool,
+                vol.Required("path_hash_size"): _bounded_query_integer(1, 3),
+                vol.Optional("hours", default=24): _bounded_query_integer(1, 168),
+                vol.Optional("limit", default=1000): _bounded_query_integer(1, 5000),
             }
         ),
         supports_response=SupportsResponse.ONLY,
@@ -842,7 +1015,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_ADVERTS_BY_CONTACT_TYPE,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_adverts_by_contact_type(
                 contact_type=call.data["contact_type"],
@@ -851,7 +1024,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 hours=call.data.get("hours"),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -867,14 +1040,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_ADVERTS_COUNT_BY_CONTACT_TYPE,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_adverts_count_by_contact_type(
                 contact_type=call.data["contact_type"],
                 hours=call.data.get("hours"),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -888,14 +1061,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_ACL_CLIENTS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_acl_clients(
                 identity_hash=call.data.get("identity_hash"),
                 identity_name=call.data.get("identity_name"),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -909,19 +1082,21 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_REMOVE_ACL_CLIENT,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_remove_acl_client(
                 public_key=call.data["public_key"],
                 identity_hash=call.data.get("identity_hash"),
+                identity_name=call.data.get("identity_name"),
             ),
             refresh=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
                 vol.Required("public_key"): str,
                 vol.Optional("identity_hash"): str,
+                vol.Optional("identity_name"): _management_validator("validate_management_name"),
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,
@@ -930,7 +1105,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_ROOM_MESSAGES,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_room_messages(
                 room_name=call.data.get("room_name"),
@@ -940,7 +1115,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 since_timestamp=call.data.get("since_timestamp"),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -957,14 +1132,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_GET_ROOM_CLIENTS,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_get_room_clients(
                 room_name=call.data.get("room_name"),
                 room_hash=call.data.get("room_hash"),
             ),
             always_return=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -978,7 +1153,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN,
         SERVICE_DELETE_ROOM_MESSAGE,
-        lambda call: _with_api_response(
+        _async_service_handler(lambda call: _with_api_response(
             call,
             lambda api, _: api.async_delete_room_message(
                 message_id=call.data["message_id"],
@@ -986,7 +1161,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 room_hash=call.data.get("room_hash"),
             ),
             refresh=True,
-        ),
+        )),
         schema=vol.Schema(
             {
                 vol.Optional(CONF_ENTRY_ID): str,
@@ -996,4 +1171,111 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_RADIO_PACKET_RATES,
+        _async_service_handler(lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_radio_packet_rates(
+                hours=call.data.get("hours", 24),
+                bucket_seconds=call.data.get("bucket_seconds"),
+            ),
+            always_return=True,
+        )),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("hours", default=24): _bounded_query_integer(1, 168),
+                vol.Optional("bucket_seconds"): _bounded_query_integer(60, 86400),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_NOISE_FLOOR_STATS,
+        _async_service_handler(lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_noise_floor_stats(
+                hours=call.data.get("hours", 24),
+                radio_id=call.data.get("radio_id"),
+            ),
+            always_return=True,
+        )),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("hours", default=24): _bounded_query_integer(1, 168),
+                vol.Optional("radio_id"): _radio_id,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_CRC_ERROR_COUNT,
+        _async_service_handler(lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_crc_error_count(
+                hours=call.data.get("hours", 24),
+                radio_id=call.data.get("radio_id"),
+            ),
+            always_return=True,
+        )),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("hours", default=24): _bounded_query_integer(1, 168),
+                vol.Optional("radio_id"): _radio_id,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_COMPANION_STATS,
+        _async_service_handler(lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_companion_stats(
+                type=call.data.get("type", "packets"),
+                companion_name=call.data.get("companion_name"),
+            ),
+            always_return=True,
+        )),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("type", default="packets"): vol.In(["core", "radio", "packets"]),
+                vol.Optional("companion_name"): vol.All(str, vol.Length(min=1)),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_LBT_DIAGNOSTICS,
+        _async_service_handler(lambda call: _with_api_response(
+            call,
+            lambda api, _: api.async_get_lbt_diagnostics(
+                hours=call.data.get("hours", 24),
+                bucket_seconds=call.data.get("bucket_seconds"),
+                severe_attempt_threshold=call.data.get("severe_attempt_threshold"),
+            ),
+            always_return=True,
+        )),
+        schema=vol.Schema(
+            {
+                vol.Optional(CONF_ENTRY_ID): str,
+                vol.Optional("hours", default=24): _bounded_query_integer(1, 168),
+                vol.Optional("bucket_seconds"): _bounded_query_integer(60, 3600),
+                vol.Optional("severe_attempt_threshold"): _bounded_query_integer(2, 16),
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
     )

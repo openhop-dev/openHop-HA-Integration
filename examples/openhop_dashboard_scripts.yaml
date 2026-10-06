@@ -1,0 +1,520 @@
+# Merge these top-level script IDs into scripts.yaml (not under another script: key).
+# Replace EXAMPLE_CONFIG_ENTRY_ID with the actual integration entry ID, not REPEATER_SLUG.
+# Rename openhop_example_ IDs and matching dashboard targets for each Repeater.
+# No schedule is installed. Responses stay in script traces, never sensor attributes.
+openhop_example_get_plugin_catalogue:
+  alias: "openHop example: catalogue check (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_plugin_catalogue
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        force_refresh: false
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: openHop catalogue
+        message: "Public catalogue entries returned: {{ [result.get('plugins', []) | count, 100] | min }}. Inspect the action response for approved IDs; no installation was requested."
+openhop_example_check_plugin_updates:
+  alias: "openHop example: plugin update check (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.check_plugin_updates
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        force_refresh: false
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: openHop plugin update check
+        message: >-
+          Checked: {{ result.get('counts', {}).get('success', 0) | int }};
+          updates available: {{ result.get('results', []) | selectattr('update_available', 'defined') | selectattr('update_available', 'eq', true) | list | count }};
+          skipped: {{ result.get('counts', {}).get('skipped', 0) | int }};
+          failed: {{ result.get('counts', {}).get('failure', 0) | int }};
+          unknown: {{ result.get('counts', {}).get('unknown', 0) | int }}.
+          No upgrade requested. Unknown is not up to date.
+
+openhop_example_install_catalogue_plugin:
+  alias: "openHop example: install catalogue plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.install_catalogue_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+        force_refresh: false
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop install catalogue plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_update_plugin:
+  alias: "openHop example: update plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.update_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+        force_refresh: false
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop update plugin"
+        message: "Success: {{ result.get('counts', {}).get('success', 0) | int }}; skipped: {{ result.get('counts', {}).get('skipped', 0) | int }}; failed: {{ result.get('counts', {}).get('failure', 0) | int }}; unknown: {{ result.get('counts', {}).get('unknown', 0) | int }}; stopped: {{ result.get('stopped', false) == true }}. Reconcile unknown outcomes before further writes; never retry blindly."
+
+openhop_example_update_all_plugins:
+  alias: "openHop example: update all plugins (review required)"
+  mode: single
+  fields:
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.update_all_plugins
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        force_refresh: false
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop update all plugins"
+        message: "Success: {{ result.get('counts', {}).get('success', 0) | int }}; skipped: {{ result.get('counts', {}).get('skipped', 0) | int }}; failed: {{ result.get('counts', {}).get('failure', 0) | int }}; unknown: {{ result.get('counts', {}).get('unknown', 0) | int }}; stopped: {{ result.get('stopped', false) == true }}. Reconcile unknown outcomes before further writes; never retry blindly."
+
+openhop_example_enable_plugin:
+  alias: "openHop example: enable plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.enable_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop enable plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_disable_plugin:
+  alias: "openHop example: disable plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.disable_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop disable plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_start_plugin:
+  alias: "openHop example: start plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.start_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop start plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_stop_plugin:
+  alias: "openHop example: stop plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.stop_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop stop plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_restart_plugin:
+  alias: "openHop example: restart plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.restart_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop restart plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_uninstall_plugin:
+  alias: "openHop example: uninstall plugin (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.uninstall_plugin
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+        delete_data: false
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop uninstall plugin"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_update_plugin_settings:
+  alias: "openHop example: update plugin settings (review required)"
+  mode: single
+  fields:
+    plugin_id:
+      name: Plugin id
+      required: true
+      selector:
+        text: {}
+    config:
+      name: Config
+      required: true
+      selector:
+        object: {}
+    restart:
+      name: Restart
+      required: true
+      default: false
+      selector:
+        boolean: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.update_plugin_settings
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        plugin_id: "{{ plugin_id }}"
+        config: "{{ config }}"
+        restart: "{{ restart }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop update plugin settings"
+        message: "Outcome: {{ result.get('outcome', 'not reported') if result.get('outcome') in ['success', 'failure', 'skipped', 'unknown'] else 'not reported' }}. Reconcile actual Repeater state before retrying failures or unknown outcomes."
+
+openhop_example_update_sensor_configuration:
+  alias: "openHop example: update sensor configuration (review required)"
+  mode: single
+  fields:
+    config:
+      name: Config
+      required: true
+      selector:
+        object: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.update_sensor_configuration
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        config: "{{ config }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop update sensor configuration"
+        message: "Saved: {{ result.get('saved', false) == true }}; restart required: {{ result.get('restart_required', false) == true }}. No restart was requested."
+
+openhop_example_set_acl_permissions:
+  alias: "openHop example: set acl permissions (review required)"
+  mode: single
+  fields:
+    identity_name:
+      name: Identity name
+      required: true
+      selector:
+        text: {}
+    client_pubkey:
+      name: Client pubkey
+      required: true
+      selector:
+        text: {}
+    permissions:
+      name: Permissions
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          mode: box
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true }}"
+    - service: pymc_repeater.set_acl_permissions
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        identity_name: "{{ identity_name }}"
+        client_pubkey: "{{ client_pubkey }}"
+        permissions: "{{ permissions }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop set acl permissions"
+        message: "Action returned. Persistence: {{ 'yes' if result.get('persisted') == true else ('no' if result.get('persisted') == false else 'not reported') }}. Verify the target ACL in the Repeater; no client key is shown here."
+
+# Identity-scoped only: the native service also supports every-ACL removal.
+openhop_example_remove_acl_client:
+  alias: "openHop example: remove acl client (review required)"
+  mode: single
+  fields:
+    public_key:
+      name: Public key
+      required: true
+      selector:
+        text: {}
+    identity_name:
+      name: Identity name
+      required: true
+      selector:
+        text: {}
+    confirmed:
+      name: I reviewed the target and consequences
+      required: true
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - condition: template
+      value_template: "{{ confirmed | default(false) == true and identity_name is defined and identity_name is string and identity_name | trim | length > 0 }}"
+    - service: pymc_repeater.remove_acl_client
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        public_key: "{{ public_key }}"
+        identity_name: "{{ identity_name }}"
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop remove acl client"
+        message: "Action returned. Persistence: {{ 'yes' if result.get('persisted') == true else ('no' if result.get('persisted') == false else 'not reported') }}. Verify the target ACL in the Repeater; no client key is shown here."
+
+openhop_example_get_sensor_types:
+  alias: "openHop example: get sensor types (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_sensor_types
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop get sensor types"
+        message: "Read-only query completed. Inspect the private script trace for the response; no hardware read or refresh was forced. This notification does not publish raw diagnostic data."
+
+openhop_example_get_radio_packet_rates:
+  alias: "openHop example: get radio packet rates (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_radio_packet_rates
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        hours: 24
+        bucket_seconds: 300
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop get radio packet rates"
+        message: "Read-only query completed. Inspect the private script trace for the response; no hardware read or refresh was forced. This notification does not publish raw diagnostic data."
+
+openhop_example_get_noise_floor_stats:
+  alias: "openHop example: get noise floor stats (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_noise_floor_stats
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        hours: 24
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop get noise floor stats"
+        message: "Read-only query completed. Inspect the private script trace for the response; no hardware read or refresh was forced. This notification does not publish raw diagnostic data."
+
+openhop_example_get_crc_error_count:
+  alias: "openHop example: get crc error count (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_crc_error_count
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        hours: 24
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop get crc error count"
+        message: "Read-only query completed. Inspect the private script trace for the response; no hardware read or refresh was forced. This notification does not publish raw diagnostic data."
+
+openhop_example_get_companion_stats:
+  alias: "openHop example: get companion stats (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_companion_stats
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        type: packets
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop get companion stats"
+        message: "Read-only query completed. Inspect the private script trace for the response; no hardware read or refresh was forced. This notification does not publish raw diagnostic data."
+
+openhop_example_get_lbt_diagnostics:
+  alias: "openHop example: get lbt diagnostics (read-only)"
+  mode: single
+  sequence:
+    - service: pymc_repeater.get_lbt_diagnostics
+      data:
+        config_entry_id: EXAMPLE_CONFIG_ENTRY_ID
+        hours: 24
+        bucket_seconds: 300
+        severe_attempt_threshold: 3
+      response_variable: result
+    - service: persistent_notification.create
+      data:
+        title: "openHop get lbt diagnostics"
+        message: "Read-only query completed. Inspect the private script trace for the response; no hardware read or refresh was forced. This notification does not publish raw diagnostic data."

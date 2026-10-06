@@ -36,11 +36,13 @@ Normal polling reads the Repeater's cached update status without discovering Git
 - UI-based setup and options flows
 - Configurable integration-wide polling interval
 - Repeater, single/multi-radio stack, packet, routing, and signal-quality telemetry
+- Named radio airtime budgets, cached noise, packet-window and LBT summaries when the backend supplies per-radio telemetry
 - MQTT broker, handler, and neighbor-publication status
 - Hardware, process, network, database, and metrics diagnostics
 - GPS position, fix, satellite, time-sync, and location-update data
 - External sensor-manager entities, including supported modem and UPS readings
 - Application-plugin health counts (installed, enabled, running, and failed)
+- [Explicit plugin update checks, single upgrades and sequential update-all](docs/plugin-upgrades.md), with an opt-in [daily 03:00 automation example](examples/daily-plugin-upgrades.yaml); no plugin schedule is enabled automatically
 - Neighbor-link counts, neighbor-scope queries, and on-demand neighbor history
 - Default-region, duty-cycle, advert-rate, advert-schedule, and Repeater-mode controls
 - Update status, update-channel selection, and update actions
@@ -127,6 +129,33 @@ To use it:
 7. The modem percentage card automatically finds active battery and solar-rate entities even when Home Assistant adds an area prefix or numeric suffix.
 8. For other dynamic rows, replace the complete example entity ID with the active entity ID shown in your instance. If the external sensor is not named `modem`, also update `_sensor_modem_` in the percentage card's two match strings.
 
+### Install management companion scripts
+
+The 1.3.0 view also includes read-only catalogue/update checks, an explicitly
+confirmed bulk upgrade, sensor-type inspection, five on-demand diagnostic buttons,
+and short plugin/settings, sensor and ACL editor workflows.
+
+Merge [`examples/openhop_dashboard_scripts.yaml`](examples/openhop_dashboard_scripts.yaml)
+into your existing `scripts.yaml` without overwriting existing scripts. Replace
+**every `EXAMPLE_CONFIG_ENTRY_ID`** with the actual integration entry ID selected
+in Developer tools → Actions (`config_entry_id` in its YAML) or shown in the
+integration entry URL. **`REPEATER_SLUG` is an entity prefix, not an entry ID.**
+Rename the `openhop_example_...` script IDs and matching dashboard targets for
+each additional Repeater, check configuration, and reload scripts. These script
+mappings belong inside the file included by `script: !include scripts.yaml`,
+not under a second `script:` key. Remove script buttons if not installing them.
+
+Response-only actions use sibling `response_variable` in companion scripts, not
+direct Lovelace calls. Notifications show only public outcome summaries, never
+configuration, keys or logs. Required lifecycle/configuration/ACL fields are
+entered through **Developer tools → Actions**, not a one-click placeholder write.
+All write wrappers require explicit review confirmation; uninstall preserves data.
+Read the [dashboard workflow guide](docs/dashboard-management.md) and
+[management action contracts](docs/management-actions.md) before changing settings
+or access permissions. Configuration reads and sensitive edit inputs remain
+editor-only and may appear in private HA traces; never store them as sensor attrs.
+No automation schedule or automatic Repeater restart is installed.
+
 ### Layout and compatibility
 
 - Uses built-in Home Assistant cards; no custom card installation is required
@@ -136,14 +165,16 @@ To use it:
 - Shows named badges, compact metric tiles, and explicit API, statistics, and radio problem banners; disabled GPS does not trigger an alarm
 
 The template uses the current **Sections** frontend, which requires a newer Home
-Assistant frontend than the integration's minimum supported version. Configuration
-was saved and read back on HA 2026.9; that is not a rendered-layout verification.
+Assistant frontend than the integration's minimum supported version. An earlier
+layout was saved and read back on HA 2026.9; the new management extension has only
+local structural/YAML verification, not live schema or rendered-layout verification.
 Numeric precision remains controlled by Home Assistant, without global entity-registry changes.
 
 ### Match entities to your installation
 
 - Use exact entity IDs from the same Repeater config entry, including its radio child devices
 - Radio child prefixes are independent of `REPEATER_SLUG`; replacing the parent prefix alone does not resolve every row
+- Replace every complete `sensor.EXAMPLE_RADIO_...` telemetry ID with the exact active entity from that radio child; repeat the card for other radios or remove unsupported rows
 - Repeat rows for multiple radios, plugins, or sensor sources, and remove unsupported rows or cards
 - Keep the existing view's title, path, icon, and other metadata when replacing it, and back up the complete dashboard first
 
@@ -216,12 +247,76 @@ The integration exposes Home Assistant actions for supported Repeater operations
 
 Open **Developer tools → Actions** and search for `openHop Repeater` or `pymc_repeater` to see the actions and their current fields.
 
-- aligned advanced action http budgets with backend waits plus a finite margin for ping and manual cad checks and companion text sends and login and commands
-- bounded ping reply waits to 1–60 seconds with 6 additional http seconds and companion status and telemetry waits to 1–120 seconds with 10 additional http seconds
-- added optional `response_variable` support to `pymc_repeater.companion_request_status` and `pymc_repeater.companion_request_telemetry` with unwrapped backend dictionaries and non-dictionary results wrapped under `result` while preserving calls without responses and avoiding polling or entity attributes for these results
-- surfaced explicit companion `sent: false` results as action errors without treating omitted `sent` fields on older backends as failures
+Ping reply waits are bounded to 1–60 seconds, with 6 additional HTTP seconds.
+Companion status and telemetry waits accept 1–120 seconds, with 10 additional
+HTTP seconds; text/channel sends, login and commands have finite budgets matching
+backend waits. `companion_request_status` and `companion_request_telemetry` support
+optional `response_variable` results while retaining calls without responses.
+Explicit `sent: false` raises an action error; older responses without `sent`
+remain compatible. Results are never automatically polled or stored in entities.
 
 The raw radio-config action accepts the Repeater dev `radio_id` field for multi-radio targeting and `direct_advert_interval_hours` for the additional advert schedule. The raw MQTT-config action accepts custom `base_topic` values and neighbor-publisher settings supported by current Repeater dev builds.
+
+### Radio diagnostics and rate-history actions
+
+These five actions return data through `response_variable` and never trigger a
+coordinator refresh or add background requests:
+
+| Action | Fields |
+| --- | --- |
+| `pymc_repeater.get_radio_packet_rates` | `hours` 1–168; optional `bucket_seconds` 60–86400 |
+| `pymc_repeater.get_noise_floor_stats` | `hours` 1–168; optional exact `radio_id`; zero-sample mean is unknown |
+| `pymc_repeater.get_crc_error_count` | `hours` 1–168; optional exact `radio_id` |
+| `pymc_repeater.get_companion_stats` | `type`: `core`, `radio`, or `packets`; optional `companion_name`; local diagnostics, not remote RF telemetry |
+| `pymc_repeater.get_lbt_diagnostics` | `hours` 1–168; optional `bucket_seconds` 60–3600 and `severe_attempt_threshold` 2–16; no `radio_id` filter |
+
+All default to 24 hours where applicable. Omitted bucket sizes retain backend
+defaults. Supply `config_entry_id` when multiple Repeaters are configured. For example:
+
+```yaml
+action: pymc_repeater.get_radio_packet_rates
+data:
+  config_entry_id: YOUR_CONFIG_ENTRY_ID
+  hours: 6
+  bucket_seconds: 300
+response_variable: radio_rates
+```
+
+New endpoints require a supporting Repeater build. Unsupported endpoints return
+an action error rather than invented data. Noise statistics retain the established
+unwrapped `stats` dictionary. Other dictionaries are returned without reshaping;
+non-dictionary results use `result`. Rate buckets can include unattributed counts;
+physical TX counts can exceed parent packet totals because of fan-out.
+Advert sends now allow a 15-second HTTP budget around the backend's 10-second wait.
+
+### Plugin lifecycle, sensor configuration and ACL permissions
+
+[Explicit management actions](docs/management-actions.md) cover catalogue list/install,
+plugin enable/disable/start/stop/restart/uninstall, effective settings read and full
+settings replacement; sensor type/configuration read and complete configuration
+replacement; and ACL role assignment plus named-identity client removal.
+
+Plugin and sensor actions require response variables, stay out of coordinator
+polling, and do not trigger immediate refreshes. Plugin writes share fail-fast
+admission with upgrades; uncertain completion requires Repeater reconciliation
+before entry reload, never blind retries. Uninstall preserves data unless
+`delete_data: true` is explicit. Configuration reads redact common credential keys
+by default; `include_sensitive: true` is opt-in and can expose credentials to HA
+traces. Writes require actual complete JSON objects, not partial patches or encoded
+strings. Sensor `*****` password masks and `_original_name` rename hints are
+preserved; saving requires a separate Repeater restart to apply.
+
+`set_acl_permissions` accepts a full client public key, exact identity name and
+permissions byte 1–255 whose low two bits are 1 read-only, 2 read-write or 3 admin.
+Room servers persist only admins; inspect the optional `persisted` response.
+`remove_acl_client` adds `identity_name` while preserving `public_key` and hash-only
+legacy calls. These ACL writes refresh telemetry once after success.
+
+Manual wheel upload remains in the Repeater UI: backend multipart `wheel` upload
+is not a HA filesystem path, and no confined bounded HA file-upload contract is
+provided. Plugin logs/progress/runtime documents and forced sensor hardware reads
+are intentionally not added. See the management guide for budgets, bounds,
+replacement semantics, side effects, examples and verification limitations.
 
 ### Plugin health and bucketed neighbor history
 
@@ -229,7 +324,7 @@ Application-plugin counts use the installed plugin manager's lightweight `/api/p
 
 `Enabled plugins` is not the same as `Running plugins`: UI-only plugins can be enabled without a running process. `Failed plugins` counts only the manager's explicit `FAILED` state, not stopped/disabled plugins.
 
-The existing `pymc_repeater.get_neighbor_link_history` response-returning action accepts optional `bucket_seconds` (integer, minimum 60). Omit it to preserve the raw `rows` response. Supply it to receive `buckets`, `bucket_seconds`, and a bucket `count`; `limit` caps returned buckets rather than raw observations. This requires a Repeater build supporting bucketed history and is never polled automatically. For example:
+The existing `pymc_repeater.get_neighbor_link_history` response-returning action accepts optional `bucket_seconds` (integer, 60–86400). Omit it to preserve the raw `rows` response. Supply it to receive `buckets`, `bucket_seconds`, and a bucket `count`; `limit` caps returned buckets rather than raw observations. Optional `radio_id` filters by exact backend ID; `by_radio: true` splits buckets by receiving radio and requires `bucket_seconds`. Omit these new fields for older builds; historical result IDs are backend IDs, not HA aliases. This action is never polled automatically. For example:
 
 ```yaml
 action: pymc_repeater.get_neighbor_link_history
@@ -277,10 +372,16 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 
 ## Operational monitoring
 
-- added parent repeater `radio_status` and `radio_problem` entities from aggregate runtime health rather than api connectivity or configured child radios with `radio_error` exposed only as a boolean or unknown attribute and never raw exception text
-- recognized `single_fabric` for single-radio lifecycle handling and guarded global settings fallback to the sole named default while preferring `radio_type` over legacy `type` for configured inventory
-- preferred each reading envelope's `poll_interval_seconds` for freshness and retained the legacy global-summary fallback only when that field was absent
-- documented that effective per-reading cadence required a companion backend scheduler metadata change not yet released or deployed and that updating this integration alone could not establish legacy plugin cadence
+Parent `radio_status` and `radio_problem` describe aggregate runtime health,
+not API connectivity or the health of each configured radio. Raw radio exceptions
+are not exposed in those entities. Child configuration and explicitly attributed
+telemetry remain separate; aggregate RF counters are never assigned to children.
+
+Freshness prefers each reading's `poll_interval_seconds`. The audited Repeater dev
+still omits effective per-reading cadence, so the legacy global-summary fallback
+cannot establish every plugin's real interval. HA 1.3.0 does not fix that backend
+limitation. See [1.3.0 API and dependency notes](docs/dev-api-1.3.0.md) for exact
+source provenance, supported contracts and deliberately excluded administration.
 
 Aggregate flood/direct received, transmitted, and duplicate packet counters are
 exposed on the parent Repeater device using existing stats polling. These are

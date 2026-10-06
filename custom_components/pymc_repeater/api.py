@@ -9,12 +9,14 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-from aiohttp import ClientError, ClientResponse, ClientSession
+from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 from yarl import URL
 
 from .const import CLIENT_ID_PREFIX, DEFAULT_PACKET_WINDOW_HOURS
 
 REQUEST_TIMEOUT = 10
+PLUGIN_REQUEST_TIMEOUT = 930  # IPC completion 900 seconds plus HTTP margin
+PLUGIN_MAX_BATCH = 100
 NEIGHBOR_SCOPE_QUERY_TIMEOUT = 50
 SENSITIVE_RESPONSE_KEYS = {
     "identity_key",
@@ -121,6 +123,8 @@ class PyMCRepeaterApiClient:
         self.host = normalize_host(host)
         self.port = int(port)
         self.api_token = api_token
+        self._plugin_upgrade_active = False
+        self._plugin_upgrade_uncertain = False
 
     @property
     def base_url(self) -> str:
@@ -190,6 +194,476 @@ class PyMCRepeaterApiClient:
 
         return payload
 
+    @staticmethod
+    def validate_plugin_text(value: Any, maximum: int = 128) -> str:
+        """Bound exact plugin IDs/version tokens without trimming or coercion."""
+        if (not isinstance(value, str) or not 1 <= len(value) <= maximum
+                or not value.isascii() or not value[0].isalnum()
+                or any(not (char.isalnum() or char in "._+-") for char in value)):
+            raise PyMCRepeaterApiError("Invalid plugin ID or version token")
+        return value
+
+    async def _async_plugin_payload(
+        self, method: str, path: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        """Use finite IPC-compatible budgets; never expose backend error text."""
+        try:
+            payload = await self._async_request_json(
+                method, path, auth="api_token", timeout_seconds=PLUGIN_REQUEST_TIMEOUT,
+                plugin_request=True, **kwargs,
+            )
+        except PyMCRepeaterAuthenticationError:
+            return {"success": False, "reason": "authentication_failed"}
+        except PyMCRepeaterCannotConnect:
+            return {"success": False, "outcome": "unknown", "reason": "connection_lost"}
+        except (PyMCRepeaterApiError, TimeoutError, ValueError):
+            return {"success": False, "outcome": "unknown", "reason": "invalid_or_lost_response"}
+        if not isinstance(payload, dict):
+            return {"success": False, "outcome": "unknown", "reason": "invalid_response"}
+        if payload.get("success") is not False and "data" in payload:
+            payload = payload["data"]
+            if not isinstance(payload, dict):
+                return {"success": False, "outcome": "unknown", "reason": "invalid_response"}
+        if payload.get("success") is False:
+            status = payload.get("http_status")
+            uncertain = payload.get("outcome") == "unknown" or status in (409, 502, 504)
+            return {"success": False, "outcome": "unknown" if uncertain else "failure",
+                    "reason": "operation_in_progress" if status == 409 else "backend_error"}
+        return payload
+
+    async def _async_plugin_inventory(self) -> list[dict[str, Any]]:
+        """Keep only installed identity/version/provenance for action planning."""
+        data = await self._async_plugin_payload("GET", "/api/plugins/")
+        rows = data.get("plugins")
+        if data.get("success") is False or not isinstance(rows, list) or len(rows) > PLUGIN_MAX_BATCH:
+            raise PyMCRepeaterApiError("Plugin inventory unavailable or exceeds 100 plugins")
+        result, seen = [], set()
+        for row in rows:
+            if not isinstance(row, dict):
+                raise PyMCRepeaterApiError("Invalid plugin inventory")
+            plugin_id = self.validate_plugin_text(row.get("id"))
+            if plugin_id in seen:
+                raise PyMCRepeaterApiError("Duplicate plugin inventory identity")
+            seen.add(plugin_id)
+            try:
+                version = self.validate_plugin_text(row.get("version"))
+            except PyMCRepeaterApiError:
+                version = None
+            repository = row.get("repository")
+            result.append({"id": plugin_id, "version": version,
+                           "eligible": row.get("source") == "catalogue"
+                           and isinstance(repository, str) and bool(repository.strip())})
+        return result
+
+    async def _async_plugin_check(self, row: dict[str, Any], force_refresh: bool) -> dict[str, Any]:
+        result = {"id": row["id"], "installed_version": row["version"]}
+        if not row["eligible"]:
+            return {**result, "outcome": "skipped", "reason": "not_catalogue_or_repository_unavailable"}
+        data = await self._async_plugin_payload(
+            "GET", "/api/plugins/updates", params={"id": row["id"], "refresh": str(force_refresh).lower()},
+        )
+        if data.get("success") is False:
+            return {**result, "outcome": data.get("outcome", "failure"), "reason": data["reason"]}
+        latest = data.get("latestVersion")
+        if not isinstance(data.get("updateAvailable"), bool) or data.get("id") != row["id"]:
+            return {**result, "outcome": "unknown", "reason": "invalid_check_response"}
+        if latest is not None:
+            try:
+                latest = self.validate_plugin_text(latest)
+            except PyMCRepeaterApiError:
+                return {**result, "outcome": "unknown", "reason": "invalid_version_response"}
+        if data["updateAvailable"] and latest is None:
+            return {**result, "outcome": "unknown", "reason": "missing_target_version"}
+        return {**result, "outcome": "success", "latest_version": latest,
+                "update_available": data["updateAvailable"]}
+
+    @staticmethod
+    def _plugin_summary(results: list[dict[str, Any]], *, stopped: bool = False) -> dict[str, Any]:
+        return {"results": results, "counts": {outcome: sum(row["outcome"] == outcome for row in results)
+                for outcome in ("success", "skipped", "failure", "unknown")}, "stopped": stopped}
+
+    async def async_check_plugin_updates(
+        self, *, plugin_id: str | None = None, force_refresh: bool = False
+    ) -> dict[str, Any]:
+        """Check installed catalogue plugins on demand, without changing polling."""
+        if plugin_id is not None:
+            plugin_id = self.validate_plugin_text(plugin_id)
+        if not isinstance(force_refresh, bool):
+            raise PyMCRepeaterApiError("force_refresh must be boolean")
+        rows = await self._async_plugin_inventory()
+        if plugin_id is not None:
+            rows = [row for row in rows if row["id"] == plugin_id]
+            if not rows:
+                return self._plugin_summary([{"id": plugin_id, "outcome": "skipped", "reason": "not_installed"}])
+        return self._plugin_summary([await self._async_plugin_check(row, force_refresh) for row in rows])
+
+    async def _async_plugin_upgrade(
+        self, row: dict[str, Any], *, version: str | None, force_refresh: bool
+    ) -> dict[str, Any]:
+        checked = await self._async_plugin_check(row, force_refresh)
+        if checked["outcome"] != "success":
+            return checked
+        if version is None and not checked["update_available"]:
+            return {**checked, "outcome": "skipped", "reason": "no_update"}
+        target = version or checked["latest_version"]
+        data = await self._async_plugin_payload(
+            "POST", "/api/plugins/update",
+            json_body={"id": row["id"], "version": target, "force_refresh": force_refresh},
+        )
+        if data.get("success") is False:
+            return {**checked, "outcome": data.get("outcome", "failure"), "reason": data["reason"]}
+        plugin = data.get("plugin")
+        # Enabled plugins return enable()/status(), which has no updated flag.
+        # Verify returned identity and exact installed target, not the HTTP envelope.
+        if not isinstance(plugin, dict) or plugin.get("id") != row["id"]:
+            return {**checked, "outcome": "unknown", "reason": "invalid_update_response"}
+        if plugin.get("updated") is False:
+            return {**checked, "outcome": "skipped", "reason": "no_update"}
+        actual = plugin.get("version")
+        if not isinstance(actual, str) or actual.removeprefix("v") != target.removeprefix("v"):
+            return {**checked, "outcome": "unknown", "reason": "target_version_unconfirmed"}
+        return {**checked, "outcome": "success", "version": actual, "updated": True}
+
+    async def _async_plugin_upgrade_batch(
+        self, *, plugin_id: str | None = None, version: str | None = None,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Fail-fast admission per client; never enqueue upgrades or retry writes."""
+        if plugin_id is not None:
+            plugin_id = self.validate_plugin_text(plugin_id)
+        if version is not None:
+            version = self.validate_plugin_text(version)
+        if not isinstance(force_refresh, bool):
+            raise PyMCRepeaterApiError("force_refresh must be boolean")
+        if getattr(self, "_plugin_upgrade_active", False):
+            raise PyMCRepeaterApiError("Plugin upgrade already in progress")
+        if getattr(self, "_plugin_upgrade_uncertain", False):
+            raise PyMCRepeaterApiError("Previous plugin upgrade outcome uncertain; reconcile on Repeater before reloading entry")
+        self._plugin_upgrade_active = True
+        write_possible = False
+        try:
+            rows = await self._async_plugin_inventory()
+            if plugin_id is not None:
+                rows = [row for row in rows if row["id"] == plugin_id]
+                if not rows:
+                    return self._plugin_summary([{"id": plugin_id, "outcome": "skipped", "reason": "not_installed"}])
+            results, stopped = [], False
+            for row in rows:
+                if stopped:
+                    results.append({"id": row["id"], "outcome": "skipped", "reason": "batch_stopped"})
+                    continue
+                write_possible = True
+                result = await self._async_plugin_upgrade(row, version=version, force_refresh=force_refresh)
+                write_possible = False
+                results.append(result)
+                if result["outcome"] == "unknown":
+                    stopped = True
+                    self._plugin_upgrade_uncertain = True
+            return self._plugin_summary(results, stopped=stopped)
+        except asyncio.CancelledError:
+            # Cancellation cannot cancel an accepted remote IPC install.
+            if write_possible:
+                self._plugin_upgrade_uncertain = True
+            raise
+        finally:
+            self._plugin_upgrade_active = False
+
+    @staticmethod
+    def validate_sensor_configuration(value: Any) -> dict[str, Any]:
+        """Require complete replacement input, not a defaults-resetting patch."""
+        import math
+        value = PyMCRepeaterApiClient.validate_json_object(value)
+        required = {"enabled", "poll_interval_seconds", "auto_install_packages", "definitions"}
+        if set(value) != required:
+            raise PyMCRepeaterApiError("Sensor configuration requires all four replacement fields")
+        for key in ("enabled", "auto_install_packages"):
+            if not isinstance(value[key], bool):
+                raise PyMCRepeaterApiError(key + " must be boolean")
+        interval = value["poll_interval_seconds"]
+        if isinstance(interval, bool) or not isinstance(interval, (int, float)) or not math.isfinite(interval) or interval <= 0:
+            raise PyMCRepeaterApiError("poll_interval_seconds must be finite and positive")
+        definitions = value["definitions"]
+        if not isinstance(definitions, list) or len(definitions) > 100:
+            raise PyMCRepeaterApiError("definitions must be an array of at most 100 sensors")
+        names, origins = set(), set()
+        for definition in definitions:
+            if not isinstance(definition, dict):
+                raise PyMCRepeaterApiError("Sensor definitions must be objects")
+            name = PyMCRepeaterApiClient.validate_management_name(definition.get("name"))
+            PyMCRepeaterApiClient.validate_management_name(definition.get("type"))
+            if name in names:
+                raise PyMCRepeaterApiError("Duplicate sensor name")
+            names.add(name)
+            if "settings" in definition and not isinstance(definition["settings"], dict):
+                raise PyMCRepeaterApiError("Sensor settings must be a JSON object")
+            for key in ("enabled", "auto_install_packages"):
+                if key in definition and not isinstance(definition[key], bool):
+                    raise PyMCRepeaterApiError(key + " must be boolean")
+            if "_original_name" in definition:
+                origin = (definition["type"], PyMCRepeaterApiClient.validate_management_name(definition["_original_name"]))
+                if origin in origins:
+                    raise PyMCRepeaterApiError("Duplicate sensor origin")
+                origins.add(origin)
+        return value
+
+    @staticmethod
+    def validate_management_name(value: Any) -> str:
+        """Bound an exact human-readable identity without changing it."""
+        if not isinstance(value, str) or not value.strip() or len(value) > 256 or any(ord(char) < 32 for char in value):
+            raise PyMCRepeaterApiError("Name must be a nonempty string of at most 256 characters without controls")
+        return value
+
+    async def _async_management_payload(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Use finite budgets and fixed errors for sensitive management calls."""
+        try:
+            data = await self._async_request_json(method, path, auth="api_token", timeout_seconds=30,
+                                                  plugin_request=True, max_response_bytes=1024 * 1024, **kwargs)
+        except PyMCRepeaterError as err:
+            raise PyMCRepeaterApiError("Management request failed; reconcile before retrying writes") from err
+        if not isinstance(data, dict) or data.get("success") is False:
+            raise PyMCRepeaterApiError("Management request failed; reconcile before retrying writes")
+        data = data.get("data", data)
+        if not isinstance(data, dict) or data.get("success") is False:
+            raise PyMCRepeaterApiError("Invalid management response")
+        return self.validate_json_object(data, allow_redacted=True)
+
+    async def async_get_sensor_types(self) -> dict[str, Any]:
+        """Read available types/settings schemas without touching hardware."""
+        data = await self._async_management_payload("GET", "/api/sensors_types")
+        types = data.get("types")
+        if not isinstance(types, list) or len(types) > 100 or any(not isinstance(row, dict) for row in types):
+            raise PyMCRepeaterApiError("Invalid sensor types response")
+        return {"types": self._management_config_response(types, include_sensitive=False)}
+
+    async def async_get_sensor_configuration(self, *, include_sensitive: bool = False) -> dict[str, Any]:
+        """Read configuration on demand, retaining password masks and rename origins."""
+        if not isinstance(include_sensitive, bool):
+            raise PyMCRepeaterApiError("include_sensitive must be boolean")
+        data = await self._async_management_payload("GET", "/api/sensors_config")
+        # Validate before redaction so a redacted response is never used as a write.
+        config = self.validate_sensor_configuration(data)
+        return self._management_config_response(config, include_sensitive=include_sensitive, sensor_masks=True)
+
+    async def async_update_sensor_configuration(self, *, config: dict[str, Any]) -> dict[str, Any]:
+        """Save a complete replacement; application requires an operator restart."""
+        config = self.validate_sensor_configuration(config)
+        data = await self._async_management_payload("POST", "/api/sensors_config_update", json_body=config)
+        if data.get("saved") is not True or not isinstance(data.get("restart_required"), bool):
+            raise PyMCRepeaterApiError("Sensor save unconfirmed; reconcile before retrying")
+        return {"saved": True, "restart_required": data["restart_required"]}
+
+    @staticmethod
+    def validate_json_object(value: Any, *, allow_redacted: bool = False) -> dict[str, Any]:
+        """Require real finite JSON, bounded depth/nodes and 256 KiB encoding."""
+        import json
+        import math
+        if not isinstance(value, dict):
+            raise PyMCRepeaterApiError("Configuration must be a JSON object")
+        nodes = 0
+        def visit(item: Any, depth: int) -> None:
+            nonlocal nodes
+            nodes += 1
+            if depth > 32 or nodes > 10000:
+                raise PyMCRepeaterApiError("Configuration exceeds depth or item limit")
+            if isinstance(item, dict):
+                if any(not isinstance(key, str) for key in item):
+                    raise PyMCRepeaterApiError("JSON object keys must be strings")
+                for child in item.values():
+                    visit(child, depth + 1)
+            elif isinstance(item, list):
+                for child in item:
+                    visit(child, depth + 1)
+            elif isinstance(item, str):
+                if not allow_redacted and item == "[REDACTED]":
+                    raise PyMCRepeaterApiError("Replace redacted values or explicitly request sensitive configuration before writing")
+            elif item is None or isinstance(item, bool) or isinstance(item, int):
+                pass
+            elif isinstance(item, float) and math.isfinite(item):
+                pass
+            else:
+                raise PyMCRepeaterApiError("Configuration must contain only finite JSON values")
+        visit(value, 0)
+        try:
+            encoded = json.dumps(value, allow_nan=False).encode("utf-8")
+        except (TypeError, ValueError, OverflowError, RecursionError) as err:
+            raise PyMCRepeaterApiError("Invalid JSON configuration") from err
+        if len(encoded) > 256 * 1024:
+            raise PyMCRepeaterApiError("Configuration exceeds 256 KiB")
+        return value
+
+    @staticmethod
+    def _management_config_response(value: Any, *, include_sensitive: bool, sensor_masks: bool = False) -> Any:
+        """Redact common credential keys, preserving backend sensor password masks."""
+        if isinstance(value, dict):
+            result = {}
+            for key, item in value.items():
+                normalized = key.lower().replace("-", "_")
+                secret = any(part in normalized for part in ("password", "secret", "token", "private_key", "api_key", "transport_key"))
+                if secret and not include_sensitive and not (sensor_masks and normalized == "password" and item == "*****"):
+                    result[key] = "[REDACTED]" if item else item
+                else:
+                    result[key] = PyMCRepeaterApiClient._management_config_response(
+                        item, include_sensitive=include_sensitive, sensor_masks=sensor_masks)
+            return result
+        if isinstance(value, list):
+            return [PyMCRepeaterApiClient._management_config_response(
+                item, include_sensitive=include_sensitive, sensor_masks=sensor_masks) for item in value]
+        return value
+
+    async def async_get_plugin_settings(
+        self, *, plugin_id: str, include_sensitive: bool = False,
+    ) -> dict[str, Any]:
+        """Read explicit settings only; full sensitive configuration is opt-in."""
+        plugin_id = self.validate_plugin_text(plugin_id)
+        if not isinstance(include_sensitive, bool):
+            raise PyMCRepeaterApiError("include_sensitive must be boolean")
+        data = await self._async_plugin_payload("GET", "/api/plugins/settings", params={"id": plugin_id}, max_response_bytes=1024 * 1024)
+        if data.get("success") is False or data.get("id") != plugin_id:
+            raise PyMCRepeaterApiError("Plugin settings unavailable")
+        config = self.validate_json_object(data.get("config"), allow_redacted=True)
+        return {"id": plugin_id, "config": self._management_config_response(
+            config, include_sensitive=include_sensitive)}
+
+    async def async_update_plugin_settings(
+        self, *, plugin_id: str, config: dict[str, Any], restart: bool = False,
+    ) -> dict[str, Any]:
+        """Replace plugin config, optionally restarting; return only metadata."""
+        plugin_id = self.validate_plugin_text(plugin_id)
+        config = self.validate_json_object(config)
+        if not isinstance(restart, bool):
+            raise PyMCRepeaterApiError("restart must be boolean")
+        return await self._async_plugin_write("settings", plugin_id,
+            {"id": plugin_id, "config": config, "restart": restart})
+
+    async def async_get_plugin_catalogue(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        """List bounded catalogue metadata, without paths, URLs or backend errors."""
+        if not isinstance(force_refresh, bool):
+            raise PyMCRepeaterApiError("force_refresh must be boolean")
+        data = await self._async_plugin_payload(
+            "GET", "/api/plugins/catalogue", params={"refresh": str(force_refresh).lower()}, max_response_bytes=1024 * 1024,
+        )
+        rows = data.get("plugins")
+        if data.get("success") is False or not isinstance(rows, list) or len(rows) > PLUGIN_MAX_BATCH:
+            raise PyMCRepeaterApiError("Plugin catalogue unavailable or exceeds 100 entries")
+        result, seen = [], set()
+        for row in rows:
+            if not isinstance(row, dict):
+                raise PyMCRepeaterApiError("Invalid catalogue response")
+            plugin_id = self.validate_plugin_text(row.get("id"))
+            if plugin_id in seen:
+                raise PyMCRepeaterApiError("Duplicate catalogue identity")
+            seen.add(plugin_id)
+            item = {"id": plugin_id}
+            for key in ("name", "description"):
+                if isinstance(row.get(key), str):
+                    item[key] = row[key][:1024]
+            for key in ("installed", "updateAvailable"):
+                if isinstance(row.get(key), bool):
+                    item[key] = row[key]
+            for key in ("version", "installedVersion", "latestVersion"):
+                if row.get(key) is not None:
+                    item[key] = self.validate_plugin_text(row[key])
+            result.append(item)
+        return {"plugins": result}
+
+    async def async_install_catalogue_plugin(
+        self, *, plugin_id: str, version: str | None = None, force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Install an approved catalogue wheel using the shared write guard."""
+        plugin_id = self.validate_plugin_text(plugin_id)
+        if not isinstance(force_refresh, bool):
+            raise PyMCRepeaterApiError("force_refresh must be boolean")
+        body: dict[str, Any] = {"id": plugin_id, "force_refresh": force_refresh}
+        if version is not None:
+            body["version"] = self.validate_plugin_text(version)
+        return await self._async_plugin_write("catalogue_install", plugin_id, body)
+
+    async def async_plugin_lifecycle(
+        self, *, plugin_id: str, operation: str, delete_data: bool = False,
+    ) -> dict[str, Any]:
+        """Perform an explicit lifecycle write with shared fail-fast admission."""
+        plugin_id = self.validate_plugin_text(plugin_id)
+        if operation not in {"enable", "disable", "start", "stop", "restart", "uninstall"}:
+            raise PyMCRepeaterApiError("Invalid plugin lifecycle operation")
+        if not isinstance(delete_data, bool):
+            raise PyMCRepeaterApiError("delete_data must be boolean")
+        body: dict[str, Any] = {"id": plugin_id}
+        if operation == "uninstall":
+            body["delete_data"] = delete_data
+        return await self._async_plugin_write(operation, plugin_id, body)
+
+    async def _async_plugin_write(
+        self, operation: str, plugin_id: str, body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Never queue/retry remote writes; quarantine ambiguous completion."""
+        if getattr(self, "_plugin_upgrade_active", False):
+            raise PyMCRepeaterApiError("Plugin write already in progress")
+        if getattr(self, "_plugin_upgrade_uncertain", False):
+            raise PyMCRepeaterApiError("Previous plugin write outcome uncertain; reconcile on Repeater before reloading entry")
+        self._plugin_upgrade_active = True
+        try:
+            data = await self._async_plugin_payload(
+                "POST", "/api/plugins/" + operation, json_body=body, max_response_bytes=1024 * 1024,
+            )
+            if data.get("success") is False:
+                result = {"id": plugin_id, "outcome": data.get("outcome", "failure"),
+                          "reason": data.get("reason", "backend_error")}
+            else:
+                plugin = data.get("plugin", data)
+                confirmed = isinstance(plugin, dict) and plugin.get("id") == plugin_id
+                if confirmed:
+                    if operation == "enable":
+                        confirmed = plugin.get("enabled") is True
+                    elif operation == "disable":
+                        confirmed = plugin.get("enabled") is False
+                    elif operation in {"start", "stop", "restart"}:
+                        confirmed = isinstance(plugin.get("state"), str) and plugin["state"] in {"RUNNING", "STOPPED", "DISABLED", "FAILED", "STARTING", "STOPPING"}
+                    elif operation == "uninstall":
+                        confirmed = plugin.get("uninstalled") is True and plugin.get("data_deleted") is body["delete_data"]
+                    elif operation == "settings":
+                        confirmed = isinstance(plugin.get("config"), dict) and isinstance(plugin.get("restarted"), bool)
+                    elif operation == "catalogue_install":
+                        try:
+                            actual = self.validate_plugin_text(plugin.get("version"))
+                            confirmed = "version" not in body or actual.removeprefix("v") == body["version"].removeprefix("v")
+                        except PyMCRepeaterApiError:
+                            confirmed = False
+                if not confirmed:
+                    result = {"id": plugin_id, "outcome": "unknown", "reason": "invalid_write_response"}
+                else:
+                    result = {"id": plugin_id, "outcome": "success"}
+                    for key in ("enabled", "uninstalled", "data_deleted", "restarted", "exists"):
+                        if isinstance(plugin.get(key), bool):
+                            result[key] = plugin[key]
+                    if isinstance(plugin.get("state"), str) and plugin["state"] in {"RUNNING", "STOPPED", "DISABLED", "FAILED", "STARTING", "STOPPING"}:
+                        result["state"] = plugin["state"]
+                    if isinstance(plugin.get("version"), str):
+                        try:
+                            result["version"] = self.validate_plugin_text(plugin["version"])
+                        except PyMCRepeaterApiError:
+                            pass
+            if result["outcome"] == "unknown":
+                self._plugin_upgrade_uncertain = True
+            return result
+        except asyncio.CancelledError:
+            self._plugin_upgrade_uncertain = True
+            raise
+        finally:
+            self._plugin_upgrade_active = False
+
+    async def async_update_plugin(
+        self, *, plugin_id: str, version: str | None = None,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Upgrade one installed catalogue plugin, optionally targeting a version."""
+        return await self._async_plugin_upgrade_batch(
+            plugin_id=plugin_id, version=version, force_refresh=force_refresh,
+        )
+
+    async def async_update_all_plugins(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        """Sequentially upgrade eligible installed plugins; scheduling is operator-owned."""
+        return await self._async_plugin_upgrade_batch(force_refresh=force_refresh)
+
     async def async_get_stats(self) -> dict[str, Any]:
         """Return the base repeater stats payload."""
         return await self._async_request_json("GET", "/api/stats", auth="api_token")
@@ -226,15 +700,62 @@ class PyMCRepeaterApiClient:
             params={"hours": hours},
         )
 
+    @staticmethod
+    def validate_query_integer(value: Any, minimum: int, maximum: int) -> int:
+        """Reject nonfinite, fractional and out-of-bounds query values."""
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not minimum <= value <= maximum
+            or value != int(value)
+        ):
+            raise PyMCRepeaterApiError(
+                f"Query value must be an integer between {minimum} and {maximum}"
+            )
+        return int(value)
+
+    @staticmethod
+    def validate_radio_id(value: Any) -> str:
+        """Require an exact nonempty string; never coerce or trim identities."""
+        if not isinstance(value, str) or not value.strip() or value != value.strip():
+            raise PyMCRepeaterApiError("Radio ID must be an exact nonempty string")
+        return value
+
     async def async_get_lbt_diagnostics(
-        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS,
+        bucket_seconds: int | None = None,
+        severe_attempt_threshold: int | None = None,
     ) -> dict[str, Any]:
-        """Return listen-before-talk diagnostics."""
-        return await self._async_request_wrapped(
-            "GET",
-            "/api/lbt_diagnostics",
-            params={"hours": hours},
-        )
+        """Return bounded LBT diagnostics (the backend has no radio filter)."""
+        params = {"hours": self.validate_query_integer(hours, 1, 168)}
+        if bucket_seconds is not None:
+            params["bucket_seconds"] = self.validate_query_integer(bucket_seconds, 60, 3600)
+        if severe_attempt_threshold is not None:
+            params["severe_attempt_threshold"] = self.validate_query_integer(severe_attempt_threshold, 2, 16)
+        return await self._async_request_wrapped("GET", "/api/lbt_diagnostics", params=params)
+
+    async def async_get_radio_packet_rates(
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS,
+        bucket_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Return on-demand per-radio rate buckets, retaining backend defaults."""
+        params = {"hours": self.validate_query_integer(hours, 1, 168)}
+        if bucket_seconds is not None:
+            params["bucket_seconds"] = self.validate_query_integer(bucket_seconds, 60, 86400)
+        return await self._async_request_wrapped("GET", "/api/radio_packet_rates", params=params)
+
+    async def async_get_companion_stats(
+        self, *, type: str = "packets", companion_name: str | None = None,
+    ) -> Any:
+        """Return local companion diagnostics without requesting remote RF data."""
+        if type not in ("core", "radio", "packets"):
+            raise PyMCRepeaterApiError("Companion stats type must be core, radio or packets")
+        params = {"type": type}
+        if companion_name is not None:
+            if not isinstance(companion_name, str) or not companion_name.strip():
+                raise PyMCRepeaterApiError("Companion name must be a nonempty string")
+            params["companion_name"] = companion_name
+        return await self._async_request_wrapped("GET", "/api/companion/stats", params=params)
 
     async def async_get_route_stats(self) -> dict[str, Any]:
         """Return route stats."""
@@ -289,36 +810,51 @@ class PyMCRepeaterApiClient:
         hours: int = DEFAULT_PACKET_WINDOW_HOURS,
         limit: int = 1000,
         bucket_seconds: int | None = None,
+        radio_id: str | None = None,
+        by_radio: bool | None = None,
     ) -> dict[str, Any]:
         """Return raw observations or optional time buckets for one neighbor."""
         params: dict[str, Any] = {
             "peer_hash": peer_hash,
-            "path_hash_size": path_hash_size,
-            "hours": hours,
-            "limit": limit,
+            "path_hash_size": self.validate_query_integer(path_hash_size, 1, 3),
+            "hours": self.validate_query_integer(hours, 1, 168),
+            "limit": self.validate_query_integer(limit, 1, 5000),
         }
         if bucket_seconds is not None:
-            params["bucket_seconds"] = bucket_seconds
+            params["bucket_seconds"] = self.validate_query_integer(bucket_seconds, 60, 86400)
+        if radio_id is not None:
+            params["radio_id"] = self.validate_radio_id(radio_id)
+        if by_radio is not None:
+            if not isinstance(by_radio, bool):
+                raise PyMCRepeaterApiError("by_radio must be a boolean")
+            if by_radio and bucket_seconds is None:
+                raise PyMCRepeaterApiError("by_radio requires bucket_seconds")
+            params["by_radio"] = str(by_radio).lower()
         return await self._async_request_wrapped(
             "GET", "/api/neighbor_link_history", params=params
         )
 
-    async def async_get_noise_floor_stats(self) -> dict[str, Any]:
-        """Return noise floor stats."""
-        payload = await self._async_request_wrapped(
-            "GET",
-            "/api/noise_floor_stats",
-            params={"hours": DEFAULT_PACKET_WINDOW_HOURS},
-        )
-        return payload.get("stats", payload)
+    async def async_get_noise_floor_stats(
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS, radio_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Return noise stats; a zero-sample mean is absent, not measured 0 dBm."""
+        params: dict[str, Any] = {"hours": self.validate_query_integer(hours, 1, 168)}
+        if radio_id is not None:
+            params["radio_id"] = self.validate_radio_id(radio_id)
+        payload = await self._async_request_wrapped("GET", "/api/noise_floor_stats", params=params)
+        stats = payload.get("stats", payload)
+        if isinstance(stats, dict) and stats.get("measurement_count") == 0:
+            stats = dict(stats, avg_noise_floor=None)
+        return stats
 
-    async def async_get_crc_error_count(self) -> dict[str, Any]:
-        """Return CRC error count."""
-        return await self._async_request_wrapped(
-            "GET",
-            "/api/crc_error_count",
-            params={"hours": DEFAULT_PACKET_WINDOW_HOURS},
-        )
+    async def async_get_crc_error_count(
+        self, *, hours: int = DEFAULT_PACKET_WINDOW_HOURS, radio_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Return aggregate or explicitly targeted CRC error count."""
+        params: dict[str, Any] = {"hours": self.validate_query_integer(hours, 1, 168)}
+        if radio_id is not None:
+            params["radio_id"] = self.validate_radio_id(radio_id)
+        return await self._async_request_wrapped("GET", "/api/crc_error_count", params=params)
 
     async def async_get_advert_rate_limit_stats(self) -> dict[str, Any]:
         """Return advert rate limiting stats."""
@@ -539,14 +1075,42 @@ class PyMCRepeaterApiClient:
             params["identity_name"] = identity_name
         return await self._async_request_wrapped("GET", "/api/acl_clients", params=params)
 
+    @staticmethod
+    def validate_acl_permissions(value: Any) -> int:
+        """Firmware role is the low two bits; retain the whole permissions byte."""
+        value = PyMCRepeaterApiClient.validate_query_integer(value, 1, 255)
+        if value & 3 == 0:
+            raise PyMCRepeaterApiError("Guest role is not assignable; remove the ACL entry instead")
+        return value
+
+    @staticmethod
+    def validate_acl_public_key(value: Any) -> str:
+        """Require an exact full public key without normalization."""
+        if not isinstance(value, str) or len(value) != 64 or any(char not in "0123456789abcdefABCDEF" for char in value):
+            raise PyMCRepeaterApiError("client_pubkey must be exactly 64 hexadecimal characters")
+        return value
+
+    async def async_set_acl_permissions(
+        self, *, identity_name: str, client_pubkey: str, permissions: int,
+    ) -> dict[str, Any]:
+        """Add/change an ACL role; room non-admin roles may be nonpersistent."""
+        body = {"identity_name": self.validate_management_name(identity_name),
+                "client_pubkey": self.validate_acl_public_key(client_pubkey),
+                "permissions": self.validate_acl_permissions(permissions)}
+        data = await self._async_management_payload("POST", "/api/acl_set_permissions", json_body=body)
+        return {key: data[key] for key in ("identity_name", "identity_type", "client_pubkey", "permissions", "permissions_value", "persisted") if key in data}
+
     async def async_remove_acl_client(
         self,
         *,
         public_key: str,
         identity_hash: str | None = None,
+        identity_name: str | None = None,
     ) -> dict[str, Any]:
         """Remove an authenticated client from one or more ACLs."""
         payload: dict[str, Any] = {"public_key": public_key}
+        if identity_name is not None:
+            payload["identity_name"] = self.validate_management_name(identity_name)
         if identity_hash:
             payload["identity_hash"] = identity_hash
         return await self._async_request_wrapped(
@@ -634,7 +1198,9 @@ class PyMCRepeaterApiClient:
     async def async_send_advert(self, mode: str = "flood") -> Any:
         """Trigger a flood or direct repeater advert send."""
         return await self._async_request_wrapped(
-            "POST", "/api/send_advert", json_body={"mode": mode}
+            "POST", "/api/send_advert", json_body={"mode": mode},
+            # Backend waits up to 10 seconds; allow 5 seconds for HTTP.
+            timeout_seconds=15,
         )
 
     async def async_restart_service(self) -> dict[str, Any]:
@@ -1103,6 +1669,20 @@ class PyMCRepeaterApiClient:
             raise PyMCRepeaterApiError(f"HTTP {response.status} from {path}: {detail[:200]}")
         return response
 
+    @staticmethod
+    async def _async_read_bounded_json(response: ClientResponse, maximum: int) -> Any:
+        """Bound decoded HTTP bytes before parsing, including error responses."""
+        import json
+        body = bytearray()
+        while True:
+            chunk = await response.content.read(min(65536, maximum + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+            if len(body) > maximum:
+                raise PyMCRepeaterApiError("Management response exceeds byte limit")
+        return json.loads(body)
+
     async def _async_request_json(
         self,
         method: str,
@@ -1112,6 +1692,8 @@ class PyMCRepeaterApiClient:
         json_body: dict[str, Any] | None = None,
         auth: str = "api_token",
         bearer_token: str | None = None,
+        max_response_bytes: int | None = None,
+        plugin_request: bool = False,
         timeout_seconds: float = REQUEST_TIMEOUT,
     ) -> dict[str, Any]:
         headers = {"Accept": "application/json"}
@@ -1127,6 +1709,8 @@ class PyMCRepeaterApiClient:
 
         url = f"{self.base_url}{path}"
 
+        # Override the shared session's shorter default only for slow plugin IPC.
+        request_options: dict[str, Any] = {"timeout": ClientTimeout(total=timeout_seconds)} if plugin_request else {}
         try:
             async with asyncio.timeout(timeout_seconds):
                 async with self._session.request(
@@ -1135,17 +1719,29 @@ class PyMCRepeaterApiClient:
                     params=params,
                     json=json_body,
                     headers=headers,
+                    **request_options,
                 ) as response:
                     if response.status in (401, 403):
                         raise PyMCRepeaterAuthenticationError(
                             f"Authentication failed for {path}"
                         )
                     if response.status >= 400:
+                        if plugin_request:
+                            # IPC 504 and conflict 409 must retain ambiguity, not
+                            # become generic failures or expose installation logs.
+                            try:
+                                error_payload = (await self._async_read_bounded_json(response, max_response_bytes)
+                                                 if max_response_bytes is not None else await response.json(content_type=None))
+                            except ValueError:
+                                error_payload = {}
+                            return {"success": False, "http_status": response.status,
+                                    "outcome": error_payload.get("outcome") if isinstance(error_payload, dict) else None}
                         detail = await response.text()
                         raise PyMCRepeaterApiError(
                             f"HTTP {response.status} from {path}: {detail[:200]}"
                         )
-                    payload = await response.json(content_type=None)
+                    payload = (await self._async_read_bounded_json(response, max_response_bytes)
+                               if max_response_bytes is not None else await response.json(content_type=None))
         except PyMCRepeaterError:
             raise
         except TimeoutError as err:
@@ -1156,7 +1752,7 @@ class PyMCRepeaterApiClient:
             raise PyMCRepeaterCannotConnect(
                 f"Cannot connect to {self.host}:{self.port}"
             ) from err
-        except ValueError as err:
+        except (ValueError, RecursionError) as err:
             raise PyMCRepeaterApiError(f"Invalid JSON returned by {path}") from err
 
         if isinstance(payload, dict) and payload.get("success") is False:

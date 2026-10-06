@@ -121,8 +121,8 @@ class DevApiAlignmentTests(unittest.TestCase):
             self.assertIn(service, setup)
         self.assertIn("vol.In([1, 2, 4, 8, 16])", setup)
         self.assertIn("vol.Range(min=50, max=5000)", setup)
-        self.assertIn("vol.Range(min=1, max=3)", setup)
-        self.assertIn("vol.Range(min=1, max=168)", setup)
+        self.assertIn("_bounded_query_integer(1, 3)", setup)
+        self.assertIn("_bounded_query_integer(1, 168)", setup)
         self.assertIn("vol.Range(min=1, max=5000)", setup)
 
     def test_new_diagnostics_are_exposed_as_sensors(self) -> None:
@@ -358,18 +358,18 @@ class DevApiAlignmentTests(unittest.TestCase):
         self.assertIn("async_update_listeners()", coordinator)
         self.assertNotIn("async_set_updated_data", coordinator)
 
-    def test_release_metadata_and_changelog_are_v1_2_1(self) -> None:
+    def test_release_metadata_and_changelog_are_v1_3_0(self) -> None:
         manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         workflow = (ROOT / ".github/workflows/python-smoke.yaml").read_text(
             encoding="utf-8"
         )
 
-        self.assertEqual(manifest["version"], "1.2.1")
-        self.assertIn("## 1.2.1", changelog)
+        self.assertEqual(manifest["version"], "1.3.0")
+        self.assertIn("## 1.3.0", changelog)
         self.assertIn("[#16](https://github.com/openhop-dev/openHop-HA-Integration/issues/16)", changelog)
         self.assertIn("## 1.1.6", changelog)
-        self.assertIn("## Unreleased", changelog)
+        self.assertNotIn("## Unreleased", changelog)
         self.assertIn("## 1.2.0", changelog)
         for expected in (
             "15 seconds",
