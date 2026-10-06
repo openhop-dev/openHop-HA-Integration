@@ -210,7 +210,12 @@ class ManagementTests(unittest.IsolatedAsyncioTestCase):
                          + b"[" * 100000 + b"0" + b"]" * 100000 + b"}")
         self.assertLess(len(reply.content.body), 1024 * 1024)
         count_before = len(calls)
-        result = await self.action("start_plugin", plugin_id="a")
+        # Decoder nesting limits vary by Python build and thread stack size.
+        # Inject the decoder exception to verify transport/quarantine behavior
+        # independently of whether this runtime accepts the nested envelope.
+        from unittest.mock import patch
+        with patch("json.loads", side_effect=RecursionError("decoder nesting limit")):
+            result = await self.action("start_plugin", plugin_id="a")
         self.assertEqual(result["outcome"], "unknown")
         self.assertTrue(self.api._plugin_upgrade_uncertain)
         self.assertFalse(self.api._plugin_upgrade_active)
