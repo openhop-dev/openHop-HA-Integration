@@ -1,7 +1,5 @@
 # Changelog
 
-## Unreleased
-
 ## 1.3.0
 
 - fixed advanced action dispatch by registering native async handlers so home assistant awaits operations and receives actual responses
