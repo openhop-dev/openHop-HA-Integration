@@ -834,6 +834,10 @@ sections:
         name: Broker Connected
       - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
         name: Handler Active
+      - entity: sensor.REPEATER_SLUG_mqtt_sent_messages
+        name: Session Messages Sent
+      - entity: sensor.REPEATER_SLUG_mqtt_sent_payload_bytes
+        name: Session Payload Sent
       - type: divider
       - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_1
         name: Example Broker 1

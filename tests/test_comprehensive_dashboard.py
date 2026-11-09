@@ -5,6 +5,12 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 class ComprehensiveDashboardTests(unittest.TestCase):
+    def test_mqtt_session_counters_are_in_existing_broker_card(self):
+        text = (ROOT / 'dashboards/openhop_repeater_dashboard.yaml').read_text()
+        card = text.split('title: MQTT Brokers', 1)[1].split('grid_options:', 1)[0]
+        for suffix in ('mqtt_sent_messages', 'mqtt_sent_payload_bytes'):
+            self.assertIn('sensor.REPEATER_SLUG_' + suffix, card)
+
     def test_monitoring_features_are_in_comprehensive_view(self):
         text = (ROOT / 'dashboards/openhop_repeater_dashboard.yaml').read_text()
         for token in ('Component Health', 'Radio Inventory and Settings',

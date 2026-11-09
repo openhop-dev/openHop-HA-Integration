@@ -411,6 +411,11 @@ recreated or the Repeater restarts, and change when broker membership changes;
 they are measurement snapshots, not lifetime totals. Older or incomplete broker
 counter responses remain unknown rather than showing partial totals.
 
+Both counters appear in the bundled comprehensive dashboard's **MQTT Brokers**
+card. Existing broker-disconnection and availability blueprints remain the
+appropriate health alerts; idle or reset session counters alone do not indicate
+a broker failure.
+
 See the [1.3.1 dev API review](docs/dev-api-1.3.1.md) for additional API candidates
 and the [dependency audit](docs/dependencies-1.3.1.md) for current upstream
 versions. Dependabot already maintains GitHub Actions weekly with PRs targeting
