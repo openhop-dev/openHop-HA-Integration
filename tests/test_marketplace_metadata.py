@@ -22,6 +22,10 @@ class MarketplaceMetadataTests(unittest.TestCase):
 
     def test_installation_methods_and_restart_boundaries(self):
         readme = (ROOT / "README.md").read_text()
+        self.assertLess(readme.index("[![Add to Home Assistant]"),
+                        readme.index("### Marketplace"))
+        self.assertEqual(readme.count("https://my.home-assistant.io/badges/hacs_repository.svg"), 1)
+        self.assertIn("then confirm **Add** and **Install** when prompted", readme)
         for text in (
             "Marketplace — Home Assistant 2026.11 and newer",
             "Settings → Marketplace", "Add from link",

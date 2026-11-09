@@ -59,6 +59,12 @@ Normal polling reads the Repeater's cached update status without discovering Git
 
 ## Installation
 
+Click the **Add to Home Assistant** button below to open this repository in
+your Home Assistant instance, then confirm **Add** and **Install** when prompted.
+Alternatively, follow the installation instructions below.
+
+[![Add to Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=openhop-dev&repository=openHop-HA-Integration&category=Integration)
+
 ### Marketplace — Home Assistant 2026.11 and newer
 
 1. Open **Settings → Marketplace** and accept the community-content notice if prompted.
@@ -86,8 +92,6 @@ remote Repeater software, not this Home Assistant component.
 See [Home Assistant's Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/) for installation, GitHub connection, and restart behavior.
 
 ### HACS — older Home Assistant versions
-
-[![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=openhop-dev&repository=openHop-HA-Integration&category=Integration)
 
 On Home Assistant versions before 2026.11, install this integration as a HACS custom repository:
 
