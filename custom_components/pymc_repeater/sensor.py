@@ -841,6 +841,29 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
             "brokers": _nested(data, "mqtt_status", "brokers"),
         },
     ),
+    # Aggregate session snapshots can fall when one broker is recreated or
+    # removed. MEASUREMENT deliberately avoids misleading lifetime totals.
+    PyMCSensorDescription(
+        key="mqtt_sent_messages",
+        translation_key="mqtt_sent_messages",
+        name="MQTT session messages sent",
+        icon="mdi:message-arrow-right-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="messages",
+        value_fn=lambda data: _nested(data, "mqtt_status", "sent", "messages"),
+    ),
+    PyMCSensorDescription(
+        key="mqtt_sent_payload_bytes",
+        translation_key="mqtt_sent_payload_bytes",
+        name="MQTT session payload sent",
+        icon="mdi:upload-network-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value_fn=lambda data: _nested(data, "mqtt_status", "sent", "payload_bytes"),
+    ),
     PyMCSensorDescription(
         key="mqtt_neighbors_phase",
         translation_key="mqtt_neighbors_phase",

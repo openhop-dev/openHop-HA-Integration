@@ -175,7 +175,7 @@ Add or update contract tests whenever endpoint paths, fields, limits, or respons
 
 GitHub Actions provides:
 
-- `Python Smoke`: Python 3.12 JSON validation, `compileall`, and unittest discovery.
+- `Python Smoke`: Python 3.11–3.14 JSON validation, `compileall`, and unittest discovery; source-only coverage, not a Home Assistant runtime matrix.
 - `HACS`: `hacs/action@main` for integration validation.
 - `Hassfest`: `home-assistant/actions/hassfest@master`.
 

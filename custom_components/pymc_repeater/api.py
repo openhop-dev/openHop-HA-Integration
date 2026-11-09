@@ -673,8 +673,42 @@ class PyMCRepeaterApiClient:
         return await self._async_request_wrapped("GET", "/api/hardware_stats")
 
     async def async_get_mqtt_status(self) -> dict[str, Any]:
-        """Return MQTT status."""
-        return await self._async_request_wrapped("GET", "/api/mqtt_status")
+        """Return cached status plus bounded, locally accepted session totals.
+
+        Counters reset on connection recreation, not ordinary reconnect. They
+        measure outgoing message payloads, not broker ACKs or network usage.
+        Mixed legacy/current broker rows must never become partial totals.
+        """
+        data = await self._async_request_wrapped("GET", "/api/mqtt_status")
+        if not isinstance(data, dict):
+            raise PyMCRepeaterApiError("Invalid MQTT status")
+        result = dict(data)
+        result["sent"] = {}
+        brokers = data.get("brokers")
+        if not isinstance(brokers, list):
+            return result
+        # Strip new per-broker objects from the existing status attributes;
+        # only the two allowlisted aggregate scalars enter coordinator state.
+        result["brokers"] = [
+            {key: value for key, value in row.items() if key != "sent"}
+            for row in brokers if isinstance(row, dict)
+        ]
+        if data.get("handler_active") is not True or len(brokers) > 100:
+            return result
+        totals = {"messages": 0, "payload_bytes": 0}
+        for row in brokers:
+            sent = row.get("sent") if isinstance(row, dict) else None
+            if not isinstance(sent, dict):
+                return result
+            for field in totals:
+                value = sent.get(field)
+                if type(value) is not int or not 0 <= value <= 2**63 - 1:
+                    return result
+                totals[field] += value
+                if totals[field] > 2**63 - 1:
+                    return result
+        result["sent"] = totals
+        return result
 
     async def async_get_hardware_processes(self) -> dict[str, Any]:
         """Return process summary stats."""

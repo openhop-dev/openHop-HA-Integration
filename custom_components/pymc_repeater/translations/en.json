@@ -98,6 +98,12 @@
       "configured_radio_count": {
         "name": "Configured radio count"
       },
+      "mqtt_sent_messages": {
+        "name": "MQTT session messages sent"
+      },
+      "mqtt_sent_payload_bytes": {
+        "name": "MQTT session payload sent"
+      },
       "mqtt_neighbors_phase": {
         "name": "MQTT neighbors phase"
       },

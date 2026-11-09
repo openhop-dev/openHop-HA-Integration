@@ -59,11 +59,37 @@ Normal polling reads the Repeater's cached update status without discovering Git
 
 ## Installation
 
-### HACS
+### Marketplace — Home Assistant 2026.11 and newer
+
+1. Open **Settings → Marketplace** and accept the community-content notice if prompted.
+2. Select **Add from link** in the upper-right corner and enter:
+
+   ```text
+   https://github.com/openhop-dev/openHop-HA-Integration
+   ```
+
+3. Select **Add**. If asked for a content type, select **Integration**.
+4. Connect GitHub if prompted; custom repositories require a GitHub connection.
+5. Open **openHop Repeater** and select **Install**.
+6. On a fresh installation, Marketplace can open the setup flow directly without a Home Assistant restart. Follow any restart repair shown by Home Assistant; otherwise continue with [Setup](#setup).
+
+If HACS already installed this integration, Marketplace preserves existing
+installations and updates; do not delete and recreate your integration entries.
+The internal domain remains `pymc_repeater`.
+
+Marketplace provides update notifications under **Settings → Updates**.
+**Updating an already-loaded integration still requires a Home Assistant
+restart** to activate the new Python code. Reloading the integration entry is
+not a substitute. The integration's own Repeater update controls update the
+remote Repeater software, not this Home Assistant component.
+
+See [Home Assistant's Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/) for installation, GitHub connection, and restart behavior.
+
+### HACS — older Home Assistant versions
 
 [![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=openhop-dev&repository=openHop-HA-Integration&category=Integration)
 
-This integration is currently installed as a HACS custom repository:
+On Home Assistant versions before 2026.11, install this integration as a HACS custom repository:
 
 1. Open **HACS → Integrations**.
 2. Open the top-right menu and select **Custom repositories**.
@@ -90,7 +116,8 @@ This integration is currently installed as a HACS custom repository:
 
 ## Setup
 
-After installation and restart:
+After installation (and a restart if required by your installation method),
+Marketplace may already have opened this setup flow. Otherwise:
 
 1. Open **Settings → Devices & services**.
 2. Select **Add integration**.
@@ -371,6 +398,19 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 - [Issue tracker](https://github.com/openhop-dev/openHop-HA-Integration/issues)
 
 ## Operational monitoring
+
+Version 1.3.1 adds **MQTT session messages sent** and **MQTT session payload
+sent** sensors using the existing status poll. These aggregate successful local
+publication handoffs across brokers, not broker acknowledgments, connection
+overhead, or carrier/network usage. They can reset when a broker connection is
+recreated or the Repeater restarts, and change when broker membership changes;
+they are measurement snapshots, not lifetime totals. Older or incomplete broker
+counter responses remain unknown rather than showing partial totals.
+
+See the [1.3.1 dev API review](docs/dev-api-1.3.1.md) for additional API candidates
+and the [dependency audit](docs/dependencies-1.3.1.md) for current upstream
+versions. Dependabot already maintains GitHub Actions weekly with PRs targeting
+`dev`; runtime libraries remain managed by Home Assistant.
 
 Parent `radio_status` and `radio_problem` describe aggregate runtime health,
 not API connectivity or the health of each configured radio. Raw radio exceptions

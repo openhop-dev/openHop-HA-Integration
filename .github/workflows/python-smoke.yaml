@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # HA 2024.1 requires 3.11; current HA 2026.9 requires 3.14.
+        # Source-only coverage: HA 2024.1 needs >=3.11.0; HA 2026.11 needs >=3.14.2.
         python-version: ["3.11", "3.12", "3.13", "3.14"]
     permissions:
       contents: read
