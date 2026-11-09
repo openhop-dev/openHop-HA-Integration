@@ -686,28 +686,34 @@ class PyMCRepeaterApiClient:
         result["sent"] = {}
         brokers = data.get("brokers")
         if not isinstance(brokers, list):
+            result["brokers"] = []
             return result
-        # Strip new per-broker objects from the existing status attributes;
-        # only the two allowlisted aggregate scalars enter coordinator state.
-        result["brokers"] = [
-            {key: value for key, value in row.items() if key != "sent"}
-            for row in brokers if isinstance(row, dict)
-        ]
-        if data.get("handler_active") is not True or len(brokers) > 100:
-            return result
+        # Preserve existing status fields, but never retain arbitrary sent metadata.
+        active = data.get("handler_active") is True and len(brokers) <= 100
+        normalized = []
         totals = {"messages": 0, "payload_bytes": 0}
+        complete = active
         for row in brokers:
             sent = row.get("sent") if isinstance(row, dict) else None
-            if not isinstance(sent, dict):
-                return result
+            valid = active and isinstance(sent, dict) and all(
+                type(sent.get(field)) is int and 0 <= sent[field] <= 2**63 - 1
+                for field in totals
+            )
+            if isinstance(row, dict):
+                clean = {key: value for key, value in row.items() if key != "sent"}
+                if valid and isinstance(sent, dict):
+                    clean["sent"] = {field: sent[field] for field in totals}
+                normalized.append(clean)
+            if not valid or not isinstance(sent, dict):
+                complete = False
+                continue
             for field in totals:
-                value = sent.get(field)
-                if type(value) is not int or not 0 <= value <= 2**63 - 1:
-                    return result
-                totals[field] += value
+                totals[field] += sent[field]
                 if totals[field] > 2**63 - 1:
-                    return result
-        result["sent"] = totals
+                    complete = False
+        result["brokers"] = normalized
+        if complete:
+            result["sent"] = totals
         return result
 
     async def async_get_hardware_processes(self) -> dict[str, Any]:

@@ -35,12 +35,15 @@ values; partial failure is not an all-or-nothing transaction.
 
 ### Implemented in 1.3.1
 
-The existing `/api/mqtt_status` poll now reduces per-broker `sent.messages` and
-`sent.payload_bytes` into two diagnostic sensors. No new requests are added.
+The existing `/api/mqtt_status` poll now exposes per-broker `sent.messages` and
+`sent.payload_bytes` as individual diagnostic sensors alongside the two combined
+Repeater totals. No new requests are added.
 Only complete nonnegative integer counter inventories produce totals; legacy,
 malformed, inactive, oversized or overflowing inventories remain unknown.
-Per-broker sent objects are removed before coordinator storage, retaining only
-the two allowlisted aggregate scalars alongside existing status metadata.
+Only validated message and payload-byte counters are retained from per-broker
+sent objects; arbitrary new sent metadata is not exposed. Broker sensors are
+discovered during setup and later coordinator updates, using stable identities
+and unavailable values when their source disappears or cannot be trusted.
 These measure local publication handoff, not broker acknowledgment or network
 overhead. Session recreation and broker membership changes can reduce totals,
 so both are measurements rather than lifetime increasing counters.

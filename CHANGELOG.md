@@ -4,7 +4,7 @@
 
 - added mqtt session message and payload counters to the bundled comprehensive dashboard
 - added marketplace installation and update guidance for home assistant 2026.11 while retaining older hacs instructions and added routers and network and monitoring discovery categories
-- added mqtt session message and outgoing payload byte sensors from existing cached broker status without extra polling
+- added per-broker and combined mqtt session message and outgoing payload byte sensors from existing cached broker status without extra polling
 - rejected incomplete or invalid broker counters instead of reporting partial totals and kept resettable session snapshots distinct from lifetime or network usage
 - reviewed the latest repeater dev api and documented network usage, radio front-end controls, path tracing, companion history, and message-send extension candidates
 - verified current ci action versions and home assistant-owned runtime dependencies and retained the existing weekly dependabot updates targeting dev

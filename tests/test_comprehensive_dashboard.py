@@ -8,8 +8,12 @@ class ComprehensiveDashboardTests(unittest.TestCase):
     def test_mqtt_session_counters_are_in_existing_broker_card(self):
         text = (ROOT / 'dashboards/openhop_repeater_dashboard.yaml').read_text()
         card = text.split('title: MQTT Brokers', 1)[1].split('grid_options:', 1)[0]
-        for suffix in ('mqtt_sent_messages', 'mqtt_sent_payload_bytes'):
+        for suffix in ('mqtt_session_messages_sent', 'mqtt_session_payload_sent'):
             self.assertIn('sensor.REPEATER_SLUG_' + suffix, card)
+        for broker in (f'example_broker_{index}' for index in range(1, 5)):
+            for metric in ('messages_sent', 'payload_sent'):
+                self.assertIn('sensor.REPEATER_SLUG_mqtt_' + broker + '_session_' + metric, card)
+        self.assertIn('exact active IDs', card)
 
     def test_monitoring_features_are_in_comprehensive_view(self):
         text = (ROOT / 'dashboards/openhop_repeater_dashboard.yaml').read_text()

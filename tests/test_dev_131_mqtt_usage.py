@@ -45,7 +45,7 @@ class MqttUsageTests(unittest.IsolatedAsyncioTestCase):
             result = await self.get(payload, wrapped)
             self.assertEqual(result["sent"], {"messages": 5, "payload_bytes": 123})
             self.assertNotIn("PRIVATE", repr(result))
-            self.assertNotIn("sent", result["brokers"][0])
+            self.assertEqual(result["brokers"][0]["sent"], {"messages": 2, "payload_bytes": 123})
             self.assertEqual(result["brokers"][0]["name"], "a")
             self.assertEqual(result["brokers"][0]["status"], {"connected": False})
         self.assertIn("private", payload["brokers"][0]["sent"])

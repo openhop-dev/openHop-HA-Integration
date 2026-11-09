@@ -404,15 +404,19 @@ Do not publish your admin password, JWT secret, Home Assistant token, or Repeate
 ## Operational monitoring
 
 Version 1.3.1 adds **MQTT session messages sent** and **MQTT session payload
-sent** sensors using the existing status poll. These aggregate successful local
-publication handoffs across brokers, not broker acknowledgments, connection
+sent** sensors using the existing status poll, both for each named MQTT broker
+and as combined totals across the Repeater's brokers. These count successful local
+publication handoffs, not broker acknowledgments, connection
 overhead, or carrier/network usage. They can reset when a broker connection is
 recreated or the Repeater restarts, and change when broker membership changes;
 they are measurement snapshots, not lifetime totals. Older or incomplete broker
 counter responses remain unknown rather than showing partial totals.
 
-Both counters appear in the bundled comprehensive dashboard's **MQTT Brokers**
-card. Existing broker-disconnection and availability blueprints remain the
+The combined counters appear in the bundled comprehensive dashboard's **MQTT Brokers**
+card, with replaceable examples for each broker's individual counters. Broker
+entities use installation-specific IDs; select their exact IDs from Home Assistant
+rather than assuming that replacing the Repeater prefix also replaces broker names.
+Existing broker-disconnection and availability blueprints remain the
 appropriate health alerts; idle or reset session counters alone do not indicate
 a broker failure.
 
