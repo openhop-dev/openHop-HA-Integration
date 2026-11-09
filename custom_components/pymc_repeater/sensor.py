@@ -841,6 +841,29 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
             "brokers": _nested(data, "mqtt_status", "brokers"),
         },
     ),
+    # Aggregate session snapshots can fall when one broker is recreated or
+    # removed. MEASUREMENT deliberately avoids misleading lifetime totals.
+    PyMCSensorDescription(
+        key="mqtt_sent_messages",
+        translation_key="mqtt_sent_messages",
+        name="MQTT session messages sent",
+        icon="mdi:message-arrow-right-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="messages",
+        value_fn=lambda data: _nested(data, "mqtt_status", "sent", "messages"),
+    ),
+    PyMCSensorDescription(
+        key="mqtt_sent_payload_bytes",
+        translation_key="mqtt_sent_payload_bytes",
+        name="MQTT session payload sent",
+        icon="mdi:upload-network-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value_fn=lambda data: _nested(data, "mqtt_status", "sent", "payload_bytes"),
+    ),
     PyMCSensorDescription(
         key="mqtt_neighbors_phase",
         translation_key="mqtt_neighbors_phase",
@@ -1362,6 +1385,62 @@ SENSORS: tuple[PyMCSensorDescription, ...] = (
 )
 
 
+def _mqtt_usage_brokers(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Return complete counters for unambiguous, named brokers only.
+
+    Names use the existing MQTT slug convention, never list positions or hosts.
+    Count identities before validating counters so a malformed duplicate cannot
+    silently lend its identity to another row.
+    """
+    status = _nested(data, "mqtt_status")
+    if not isinstance(status, dict) or status.get("error") or status.get("handler_active") is not True:
+        return {}
+    rows = status.get("brokers")
+    if not isinstance(rows, list) or len(rows) > 100:
+        return {}
+    candidates: dict[str, dict[str, Any]] = {}
+    ambiguous: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        identity = slugify(name)
+        if not identity:
+            continue
+        if identity in candidates:
+            ambiguous.add(identity)
+        candidates[identity] = row
+    return {
+        identity: row for identity, row in candidates.items()
+        if identity not in ambiguous and not row.get("error")
+        and isinstance(row.get("sent"), dict)
+        and all(type(row["sent"].get(field)) is int
+                and 0 <= row["sent"][field] <= 2**63 - 1
+                for field in ("messages", "payload_bytes"))
+    }
+
+
+def _setup_mqtt_usage_sensors(entry, coordinator, async_add_entities) -> None:
+    """Discover cached broker counters now and on updates; own listener on unload."""
+    created: set[str] = set()
+
+    def discover() -> None:
+        entities = []
+        for identity, broker in _mqtt_usage_brokers(coordinator.data).items():
+            for field in ("messages", "payload_bytes"):
+                entity = PyMCMqttBrokerUsageSensor(entry, coordinator, identity, broker["name"], field)
+                if entity.unique_id not in created:
+                    created.add(entity.unique_id)
+                    entities.append(entity)
+        if entities:
+            async_add_entities(entities)
+
+    discover()
+    entry.async_on_unload(coordinator.async_add_listener(discover))
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -1427,6 +1506,7 @@ async def async_setup_entry(
     from .monitoring_entities import setup_monitoring_sensors
     setup_monitoring_sensors(entry, coordinator, async_add_entities)
     async_add_entities(entities)
+    _setup_mqtt_usage_sensors(entry, coordinator, async_add_entities)
     add_external_sensor_entities()
     entry.async_on_unload(coordinator.async_add_listener(add_external_sensor_entities))
 
@@ -1521,6 +1601,41 @@ class PyMCSensorEntity(PyMCBaseEntity, SensorEntity):
         merged["raw_seconds"] = raw_seconds
         merged["display_unit"] = self._entry.options.get(CONF_UPTIME_UNIT, DEFAULT_UPTIME_UNIT)
         return merged
+
+
+class PyMCMqttBrokerUsageSensor(PyMCBaseEntity, SensorEntity):
+    """Successful local handoffs in this broker session, not network traffic."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_extra_state_attributes = None
+
+    def __init__(self, entry, coordinator, identity: str, name: str, field: str) -> None:
+        super().__init__(entry, coordinator)
+        self._identity = identity
+        self._broker_name = name
+        self._field = field
+        self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_mqtt_broker_{identity}_sent_{field}"
+        self._attr_translation_key = f"mqtt_broker_sent_{field}"
+        self._attr_translation_placeholders = {"broker": name}
+        suffix = "messages sent" if field == "messages" else "payload sent"
+        self._attr_name = f"MQTT {name} session {suffix}"
+        self._attr_icon = "mdi:message-arrow-right-outline" if field == "messages" else "mdi:upload-network-outline"
+        self._attr_native_unit_of_measurement = "messages" if field == "messages" else UnitOfInformation.BYTES
+        if field == "payload_bytes":
+            self._attr_device_class = SensorDeviceClass.DATA_SIZE
+
+    @property
+    def native_value(self) -> int | None:
+        broker = _mqtt_usage_brokers(self.coordinator.data).get(self._identity)
+        # A different name with the same slug must not take over an existing entity.
+        if broker is None or broker["name"] != self._broker_name:
+            return None
+        return broker["sent"][self._field]
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.native_value is not None
 
 
 class PyMCRouteTotalSensor(PyMCBaseEntity, SensorEntity):

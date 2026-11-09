@@ -673,8 +673,48 @@ class PyMCRepeaterApiClient:
         return await self._async_request_wrapped("GET", "/api/hardware_stats")
 
     async def async_get_mqtt_status(self) -> dict[str, Any]:
-        """Return MQTT status."""
-        return await self._async_request_wrapped("GET", "/api/mqtt_status")
+        """Return cached status plus bounded, locally accepted session totals.
+
+        Counters reset on connection recreation, not ordinary reconnect. They
+        measure outgoing message payloads, not broker ACKs or network usage.
+        Mixed legacy/current broker rows must never become partial totals.
+        """
+        data = await self._async_request_wrapped("GET", "/api/mqtt_status")
+        if not isinstance(data, dict):
+            raise PyMCRepeaterApiError("Invalid MQTT status")
+        result = dict(data)
+        result["sent"] = {}
+        brokers = data.get("brokers")
+        if not isinstance(brokers, list):
+            result["brokers"] = []
+            return result
+        # Preserve existing status fields, but never retain arbitrary sent metadata.
+        active = data.get("handler_active") is True and len(brokers) <= 100
+        normalized = []
+        totals = {"messages": 0, "payload_bytes": 0}
+        complete = active
+        for row in brokers:
+            sent = row.get("sent") if isinstance(row, dict) else None
+            valid = active and isinstance(sent, dict) and all(
+                type(sent.get(field)) is int and 0 <= sent[field] <= 2**63 - 1
+                for field in totals
+            )
+            if isinstance(row, dict):
+                clean = {key: value for key, value in row.items() if key != "sent"}
+                if valid and isinstance(sent, dict):
+                    clean["sent"] = {field: sent[field] for field in totals}
+                normalized.append(clean)
+            if not valid or not isinstance(sent, dict):
+                complete = False
+                continue
+            for field in totals:
+                totals[field] += sent[field]
+                if totals[field] > 2**63 - 1:
+                    complete = False
+        result["brokers"] = normalized
+        if complete:
+            result["sent"] = totals
+        return result
 
     async def async_get_hardware_processes(self) -> dict[str, Any]:
         """Return process summary stats."""

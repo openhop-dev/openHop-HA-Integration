@@ -834,15 +834,36 @@ sections:
         name: Broker Connected
       - entity: binary_sensor.REPEATER_SLUG_mqtt_handler_active
         name: Handler Active
+      - entity: sensor.REPEATER_SLUG_mqtt_session_messages_sent
+        name: All Brokers · Session Messages Sent
+      - entity: sensor.REPEATER_SLUG_mqtt_session_payload_sent
+        name: All Brokers · Session Payload Sent
       - type: divider
+      # Replace these example broker IDs with exact active IDs from your instance.
       - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_1
         name: Example Broker 1
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_1_session_messages_sent
+        name: Example Broker 1 · Session Messages Sent
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_1_session_payload_sent
+        name: Example Broker 1 · Session Payload Sent
       - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_2
         name: Example Broker 2
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_2_session_messages_sent
+        name: Example Broker 2 · Session Messages Sent
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_2_session_payload_sent
+        name: Example Broker 2 · Session Payload Sent
       - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_3
         name: Example Broker 3
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_3_session_messages_sent
+        name: Example Broker 3 · Session Messages Sent
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_3_session_payload_sent
+        name: Example Broker 3 · Session Payload Sent
       - entity: binary_sensor.REPEATER_SLUG_mqtt_example_broker_4
         name: Example Broker 4
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_4_session_messages_sent
+        name: Example Broker 4 · Session Messages Sent
+      - entity: sensor.REPEATER_SLUG_mqtt_example_broker_4_session_payload_sent
+        name: Example Broker 4 · Session Payload Sent
     grid_options:
       columns: full
       rows: auto
